@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addToWatchlist, loadWatchlist, type Product } from '../../store/watchlist-store';
 import { fetchProducts, type FetchProductsParams } from '../../services/api';
 import {
@@ -355,11 +356,13 @@ export default function FeedScreen() {
     }).start();
   };
 
+  const insets = useSafeAreaInsets();
+
   const renderCard = (product: Product, isTop: boolean) => {
     const pos = getPosition(product.id);
     const rotate = pos.x.interpolate({
       inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-      outputRange: ['-8deg', '0deg', '8deg'],
+      outputRange: ['-6deg', '0deg', '6deg'],
       extrapolate: 'clamp',
     });
     const likeOpacity = pos.x.interpolate({
@@ -378,6 +381,10 @@ export default function FeedScreen() {
       extrapolate: 'clamp',
     });
 
+    const shortDescription = product.description
+      ? product.description.split('.')[0].trim()
+      : '';
+
     return (
       <Animated.View
         key={product.id}
@@ -394,22 +401,33 @@ export default function FeedScreen() {
         ]}
         {...(isTop ? panResponder.panHandlers : {})}
       >
-        <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="cover" />
-        <View style={styles.cardFooter}>
-          <View style={styles.brandRow}>
-            <Text style={styles.brandName}>{product.brand}</Text>
-            <View style={styles.discountBadge}>
-              <Text style={styles.discountText}>−{product.discount}%</Text>
-            </View>
-          </View>
-          <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.colorName}>{product.color}</Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.salePrice}>{formatEur(product.salePrice)}</Text>
-            <Text style={styles.originalPrice}>{formatEur(product.originalPrice)}</Text>
-          </View>
+        {/* Vollscreen Produktbild */}
+        <Image source={{ uri: product.image }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+
+        {/* Gradient-Overlay am unteren Rand für Text-Lesbarkeit */}
+        <View style={styles.cardGradient} />
+
+        {/* Logo-Overlay oben */}
+        <View style={[styles.cardTopBar, { paddingTop: insets.top + 12 }]}>
+          <Text style={styles.cardLogo}>ONDEYA</Text>
         </View>
 
+        {/* Produktinfo — unten */}
+        <View style={styles.cardBottom}>
+          <View style={styles.cardPriceRow}>
+            <Text style={styles.cardSalePrice}>{formatEur(product.salePrice)}</Text>
+            {product.discount > 0 && (
+              <View style={styles.cardDiscountBadge}>
+                <Text style={styles.cardDiscountText}>−{product.discount}%</Text>
+              </View>
+            )}
+          </View>
+          {shortDescription ? (
+            <Text style={styles.cardDescription} numberOfLines={1}>{shortDescription}</Text>
+          ) : null}
+        </View>
+
+        {/* Wisch-Overlays */}
         {isTop && (
           <>
             <Animated.View style={[styles.overlay, styles.likeOverlay, { opacity: likeOpacity }]}>
@@ -423,32 +441,14 @@ export default function FeedScreen() {
             </Animated.View>
           </>
         )}
-
-        {isTop && (
-          <View style={styles.holdHint}>
-            <Text style={styles.holdHintText}>· · ·  lang drücken für Details</Text>
-          </View>
-        )}
       </Animated.View>
     );
   };
 
-  if (cards.length === 0) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}>
-        <Text style={styles.logo}>ONDEYA</Text>
-        <Text style={{ color: colors.linen, fontSize: 18 }}>Alle Deals gesehen.</Text>
-        <Text style={{ color: colors.taupe, fontSize: 15 }}>Schau morgen wieder vorbei.</Text>
-      </View>
-    );
-  }
-
-  const visibleCards = cards.slice(0, 2).reverse();
-
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={styles.logo}>ONDEYA</Text>
+        <Text style={styles.feedLogo}>ONDEYA</Text>
       </View>
     );
   }
@@ -457,19 +457,21 @@ export default function FeedScreen() {
     return <OnboardingScreen onComplete={() => setShowOnboarding(false)} />;
   }
 
+  if (cards.length === 0) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}>
+        <Text style={styles.feedLogo}>ONDEYA</Text>
+        <Text style={{ color: colors.linen, fontSize: 18 }}>Alle Stücke gesehen.</Text>
+        <Text style={{ color: colors.taupe, fontSize: 15 }}>Schau morgen wieder vorbei.</Text>
+      </View>
+    );
+  }
+
+  const visibleCards = cards.slice(0, 2).reverse();
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
-      <View style={styles.header}>
-        <Text style={styles.logo}>ONDEYA</Text>
-      </View>
-
-      {lastAction && (
-        <Animated.View style={[styles.toast, { opacity: actionOpacity }]}>
-          <Text style={styles.toastText}>{lastAction}</Text>
-        </Animated.View>
-      )}
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       <View style={styles.cardContainer}>
         {visibleCards.map((product, index) => {
@@ -478,11 +480,11 @@ export default function FeedScreen() {
         })}
       </View>
 
-      <View style={styles.hints}>
-        <Text style={styles.hint}>← Skip</Text>
-        <Text style={styles.hint}>↑ Kaufen</Text>
-        <Text style={styles.hint}>Watchlist →</Text>
-      </View>
+      {lastAction && (
+        <Animated.View style={[styles.toast, { opacity: actionOpacity }]}>
+          <Text style={styles.toastText}>{lastAction}</Text>
+        </Animated.View>
+      )}
 
       <DetailSheet
         product={selectedProduct}
@@ -501,13 +503,12 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.noir },
-  header: { paddingTop: 64, paddingBottom: 12, alignItems: 'center' },
-  logo: { color: colors.sand, fontSize: 20, fontWeight: '700', letterSpacing: 6 },
+  feedLogo: { color: colors.sand, fontSize: 20, fontWeight: '700', letterSpacing: 6 },
   toast: {
     position: 'absolute',
-    top: 120,
+    top: 80,
     alignSelf: 'center',
-    backgroundColor: colors.espresso,
+    backgroundColor: 'rgba(61, 54, 48, 0.92)',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -516,40 +517,56 @@ const styles = StyleSheet.create({
     borderColor: colors.taupe,
   },
   toastText: { color: colors.linen, fontSize: 14, fontWeight: '500' },
-  cardContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  cardContainer: { flex: 1 },
   card: {
     position: 'absolute',
-    width: SCREEN_WIDTH - 32,
-    height: SCREEN_HEIGHT * 0.62,
-    borderRadius: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: colors.espresso,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 12,
   },
-  productImage: { width: '100%', height: '70%' },
-  cardFooter: { flex: 1, paddingHorizontal: 18, paddingVertical: 14, gap: 3 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
-  brandName: { color: colors.taupe, fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase' },
-  discountBadge: { backgroundColor: colors.forest, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
-  discountText: { color: colors.linen, fontSize: 12, fontWeight: '700' },
-  productName: { color: colors.linen, fontSize: 17, fontWeight: '600', letterSpacing: -0.3 },
-  colorName: { color: colors.taupe, fontSize: 13 },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 2 },
-  salePrice: { color: colors.sand, fontSize: 22, fontWeight: '700' },
-  originalPrice: { color: colors.taupe, fontSize: 15, textDecorationLine: 'line-through' },
+  cardGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '45%',
+    backgroundColor: 'rgba(26, 23, 20, 0.72)',
+  },
+  cardTopBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    zIndex: 5,
+  },
+  cardLogo: { color: colors.sand, fontSize: 18, fontWeight: '700', letterSpacing: 5 },
+  cardBottom: {
+    position: 'absolute',
+    bottom: 32,
+    left: 24,
+    right: 24,
+    zIndex: 5,
+    gap: 6,
+  },
+  cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardSalePrice: { color: colors.linen, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  cardDiscountBadge: {
+    backgroundColor: colors.forest,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  cardDiscountText: { color: colors.linen, fontSize: 14, fontWeight: '700' },
+  cardDescription: { color: 'rgba(232, 221, 208, 0.75)', fontSize: 14, lineHeight: 20 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 20 },
   likeOverlay: { backgroundColor: 'rgba(46, 74, 62, 0.78)' },
   skipOverlay: { backgroundColor: 'rgba(74, 46, 46, 0.78)' },
   buyOverlay: { backgroundColor: 'rgba(201, 168, 130, 0.88)' },
   overlayText: { color: colors.linen, fontSize: 22, fontWeight: '700', letterSpacing: 3 },
-  holdHint: { position: 'absolute', bottom: 14, alignSelf: 'center', zIndex: 5 },
-  holdHintText: { color: colors.taupe, fontSize: 11, letterSpacing: 0.5 },
-  hints: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 36, paddingBottom: 52 },
-  hint: { color: colors.taupe, fontSize: 13, letterSpacing: 0.3 },
 
   // Detail Sheet
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
