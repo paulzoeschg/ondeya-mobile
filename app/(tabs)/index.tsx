@@ -20,36 +20,26 @@ import {
   isOnboardingDone,
   loadPreferences,
   subscribePreferences,
-  type BudgetType,
-  type DiscountType,
+  type PriceRangeType,
 } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
 import OnboardingScreen from './OnboardingScreen';
 
-// Budget-Buckets der Präferenzen → Maximalpreis (GBP, Sale-Preis)
-const BUDGET_TO_MAX_PRICE: Record<BudgetType, number | undefined> = {
-  under50: 50,
-  '50to150': 150,
-  '150to300': 300,
-  over300: undefined,
+const PRICE_RANGE_TO_MAX: Record<PriceRangeType, number | undefined> = {
+  bis50: 50,
+  '50bis150': 150,
+  '150bis300': 300,
+  ueber300: undefined,
+  egal: undefined,
 };
 
 function preferenceFilters(): FetchProductsParams {
   const prefs = getPreferences();
   const filters: FetchProductsParams = {};
 
-  if (prefs.budget) {
-    const max = BUDGET_TO_MAX_PRICE[prefs.budget];
+  if (prefs.priceRange && prefs.priceRange !== 'egal') {
+    const max = PRICE_RANGE_TO_MAX[prefs.priceRange];
     if (max !== undefined) filters.maxPrice = max;
-  }
-
-  if (prefs.minDiscount) {
-    filters.minDiscount = parseInt(prefs.minDiscount as DiscountType, 10);
-  }
-
-  // Nur filtern wenn der Nutzer eine Auswahl getroffen hat — leere Liste = alle
-  if (prefs.categories.length > 0 && prefs.categories.length < 3) {
-    filters.category = prefs.categories.join(',');
   }
 
   return filters;
