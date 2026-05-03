@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Ondeya benötigt Zugriff auf deine Fotos, um ein Profilbild festzulegen."
+      }
     },
     "android": {
       "adaptiveIcon": {
