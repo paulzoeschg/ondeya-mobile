@@ -14,6 +14,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { addToWatchlist, loadWatchlist, type Product } from '../../store/watchlist-store';
 import { fetchProducts, type FetchProductsParams } from '../../services/api';
 import {
@@ -73,6 +75,7 @@ function DetailSheet({
 }) {
   const [activeImage, setActiveImage] = useState(0);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
     if (visible) {
@@ -92,22 +95,37 @@ function DetailSheet({
     }
   }, [visible]);
 
+  // Swipe-down-to-close auf dem Handle
+  const swipeCloseResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 60) onClose();
+      },
+    })
+  ).current;
+
   if (!product) return null;
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
-      {/* Backdrop */}
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+      {/* Schwarzes Backdrop — kein Tap-to-close */}
+      <View style={styles.backdrop} />
 
-      {/* Sheet */}
+      {/* ONDEYA Logo sichtbar über dem Backdrop */}
+      <View style={[styles.sheetLogoArea, { paddingTop: insets.top + 12 }]}>
+        <Text style={styles.sheetLogoText}>ONDEYA</Text>
+      </View>
+
+      {/* Sheet — nur nach unten wischen schließt */}
       <Animated.View
         style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
       >
-        {/* Handle + X-Button */}
-        <View style={styles.sheetHandle} />
-        <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
-          <Text style={styles.sheetCloseBtnText}>✕</Text>
-        </TouchableOpacity>
+        {/* Handle — trägt den Swipe-down-Responder */}
+        <View style={styles.sheetHandleArea} {...swipeCloseResponder.panHandlers}>
+          <View style={styles.sheetHandle} />
+        </View>
 
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Bildgalerie */}
@@ -144,17 +162,14 @@ function DetailSheet({
 
           {/* Produktinfo */}
           <View style={styles.sheetContent}>
-            {/* Brand + Kategorie */}
             <View style={styles.sheetBrandRow}>
               <Text style={styles.sheetBrand}>{product.brand.toUpperCase()}</Text>
               <Text style={styles.sheetCategory}>{product.category}</Text>
             </View>
 
-            {/* Name + Farbe */}
             <Text style={styles.sheetName}>{product.name}</Text>
             <Text style={styles.sheetColor}>{product.color}</Text>
 
-            {/* Preis */}
             <View style={styles.sheetPriceRow}>
               <Text style={styles.sheetSalePrice}>{formatEur(product.salePrice)}</Text>
               <Text style={styles.sheetOriginalPrice}>{formatEur(product.originalPrice)}</Text>
@@ -163,10 +178,8 @@ function DetailSheet({
               </View>
             </View>
 
-            {/* Beschreibung */}
             <Text style={styles.sheetDescription}>{product.description}</Text>
 
-            {/* Details */}
             {product.details && product.details.length > 0 && (
               <View style={styles.detailsList}>
                 {product.details.map((detail, i) => (
@@ -178,7 +191,6 @@ function DetailSheet({
               </View>
             )}
 
-            {/* Buttons */}
             <TouchableOpacity
               style={styles.buyButtonFull}
               onPress={() => {
@@ -206,9 +218,12 @@ function DetailSheet({
 }
 
 export default function FeedScreen() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [cards, setCards] = useState<Product[]>([]);
+  const [showNav, setShowNav] = useState(false);
+  const navAnim = useRef(new Animated.Value(0)).current;
 
   // Beim Start: Präferenzen + Produkte vom Backend laden
   useEffect(() => {
@@ -269,6 +284,20 @@ export default function FeedScreen() {
       duration: 1200,
       useNativeDriver: true,
     }).start(() => setLastAction(null));
+  };
+
+  const openNav = () => {
+    setShowNav(true);
+    Animated.spring(navAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }).start();
+  };
+
+  const closeNav = () => {
+    Animated.timing(navAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShowNav(false));
+  };
+
+  const navigateTo = (route: '/') => {
+    closeNav();
+    if (route !== '/') router.push(route as any);
   };
 
   // Ref damit PanResponder immer die neueste swipeCard-Funktion aufruft
@@ -407,8 +436,12 @@ export default function FeedScreen() {
         {/* Vollscreen Produktbild */}
         <Image source={{ uri: product.image }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
 
-        {/* Gradient-Overlay am unteren Rand für Text-Lesbarkeit */}
-        <View style={styles.cardGradient} />
+        {/* Gradient — nur unteres Drittel, von transparent nach dunkel */}
+        <LinearGradient
+          colors={['transparent', 'rgba(26,23,20,0.55)', 'rgba(26,23,20,0.88)']}
+          locations={[0, 0.5, 1]}
+          style={styles.cardGradient}
+        />
 
         {/* Logo-Overlay oben */}
         <View style={[styles.cardTopBar, { paddingTop: insets.top + 12 }]}>
@@ -426,7 +459,7 @@ export default function FeedScreen() {
             )}
           </View>
           {shortDescription ? (
-            <Text style={styles.cardDescription} numberOfLines={1}>{shortDescription}</Text>
+            <Text style={styles.cardDescription} numberOfLines={2} ellipsizeMode="tail">{shortDescription}</Text>
           ) : null}
         </View>
 
@@ -472,6 +505,9 @@ export default function FeedScreen() {
 
   const visibleCards = cards.slice(0, 2).reverse();
 
+  const navTranslateY = navAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
+  const navOpacity = navAnim;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -487,6 +523,36 @@ export default function FeedScreen() {
         <Animated.View style={[styles.toast, { opacity: actionOpacity }]}>
           <Text style={styles.toastText}>{lastAction}</Text>
         </Animated.View>
+      )}
+
+      {/* Nav-Trigger: unsichtbarer Bereich unten Mitte — lang drücken öffnet Nav */}
+      <View
+        style={styles.navTrigger}
+        onStartShouldSetResponder={() => false}
+      >
+        <TouchableOpacity
+          style={styles.navTriggerTouch}
+          onLongPress={openNav}
+          delayLongPress={400}
+          activeOpacity={1}
+        />
+      </View>
+
+      {/* Floating Nav-Overlay */}
+      {showNav && (
+        <TouchableOpacity style={styles.navBackdrop} activeOpacity={1} onPress={closeNav}>
+          <Animated.View style={[styles.navBar, { opacity: navOpacity, transform: [{ translateY: navTranslateY }] }]}>
+            <TouchableOpacity style={styles.navItem} onPress={() => navigateTo('/')}>
+              <Text style={[styles.navItemText, styles.navItemActive]}>Feed</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/explore' as any); }}>
+              <Text style={styles.navItemText}>Watchlist</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/profile' as any); }}>
+              <Text style={styles.navItemText}>Profil</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
       )}
 
       <DetailSheet
@@ -571,8 +637,62 @@ const styles = StyleSheet.create({
   buyOverlay: { backgroundColor: 'rgba(201, 168, 130, 0.88)' },
   overlayText: { color: colors.linen, fontSize: 22, fontWeight: '700', letterSpacing: 3 },
 
+  // Nav Trigger + Overlay
+  navTrigger: {
+    position: 'absolute',
+    bottom: 0,
+    left: SCREEN_WIDTH / 2 - 60,
+    width: 120,
+    height: 70,
+    zIndex: 50,
+  },
+  navTriggerTouch: { flex: 1 },
+  navBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 60,
+    justifyContent: 'flex-end',
+    paddingBottom: 24,
+    alignItems: 'center',
+  },
+  navBar: {
+    backgroundColor: colors.espresso,
+    borderRadius: 24,
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 127, 114, 0.3)',
+    gap: 4,
+  },
+  navItem: {
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 18,
+  },
+  navItemText: { color: colors.taupe, fontSize: 15, fontWeight: '600' },
+  navItemActive: { color: colors.sand },
+
   // Detail Sheet
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+  },
+  sheetLogoArea: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    zIndex: 10,
+  },
+  sheetLogoText: { color: colors.sand, fontSize: 18, fontWeight: '700', letterSpacing: 5 },
+  sheetHandleArea: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -589,19 +709,8 @@ const styles = StyleSheet.create({
     height: 4,
     backgroundColor: colors.taupe,
     borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
     opacity: 0.5,
   },
-  sheetCloseBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 16,
-    padding: 8,
-    zIndex: 20,
-  },
-  sheetCloseBtnText: { color: colors.taupe, fontSize: 18, fontWeight: '600' },
   sheetImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH * 1.1,
