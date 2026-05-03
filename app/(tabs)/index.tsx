@@ -103,8 +103,11 @@ function DetailSheet({
       <Animated.View
         style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
       >
-        {/* Handle */}
+        {/* Handle + X-Button */}
         <View style={styles.sheetHandle} />
+        <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+          <Text style={styles.sheetCloseBtnText}>✕</Text>
+        </TouchableOpacity>
 
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Bildgalerie */}
@@ -591,6 +594,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     opacity: 0.5,
   },
+  sheetCloseBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
+    padding: 8,
+    zIndex: 20,
+  },
+  sheetCloseBtnText: { color: colors.taupe, fontSize: 18, fontWeight: '600' },
   sheetImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH * 1.1,
