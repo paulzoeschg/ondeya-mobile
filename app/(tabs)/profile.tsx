@@ -7,20 +7,31 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  TextInput,
+  Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import {
   getPreferences,
   setPreferences,
   resetPreferences,
-  type StyleType,
-  type BudgetType,
-  type DiscountType,
-  type SizeType,
-  type CategoryType,
+  type GenderType,
+  type StyleV2Type,
+  type CategoryV2Type,
+  type PriceRangeType,
+  type DiscoveryAffinityType,
 } from '../../store/preferences-store';
 import { ACTIVE_CATEGORIES } from '../../constants/categories';
 import { resetWatchlist } from '../../store/watchlist-store';
+
+const PROFILE_STORAGE_KEY = '@ondeya_profile';
+
+type ProfileData = {
+  name: string;
+  avatarUri: string | null;
+};
 
 const colors = {
   noir: '#1a1714',
@@ -31,6 +42,8 @@ const colors = {
   forest: '#2e4a3e',
   terracotta: '#4a2e2e',
 };
+
+// --- Subkomponenten ---
 
 function SettingChip({
   label,
@@ -61,26 +74,99 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function Avatar({ name, uri, onPress }: { name: string; uri: string | null; onPress: () => void }) {
+  const initials = name
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase())
+    .slice(0, 2)
+    .join('');
+
+  return (
+    <TouchableOpacity style={styles.avatarWrapper} onPress={onPress} activeOpacity={0.8}>
+      {uri ? (
+        <Image source={{ uri }} style={styles.avatarImage} />
+      ) : (
+        <View style={styles.avatarPlaceholder}>
+          <Text style={styles.avatarInitials}>{initials || '?'}</Text>
+        </View>
+      )}
+      <View style={styles.avatarEditBadge}>
+        <Text style={styles.avatarEditText}>+</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// --- Profil-Daten laden/speichern (lokal, kein Backend) ---
+
+async function loadProfile(): Promise<ProfileData> {
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as ProfileData;
+  } catch (_) {}
+  return { name: '', avatarUri: null };
+}
+
+async function saveProfile(data: ProfileData): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
+  } catch (_) {}
+}
+
+// --- Screen ---
+
 export default function ProfileScreen() {
   const [prefs, setPrefs] = useState(getPreferences());
+  const [profile, setProfile] = useState<ProfileData>({ name: '', avatarUri: null });
 
   useFocusEffect(
     useCallback(() => {
       setPrefs(getPreferences());
+      loadProfile().then(setProfile);
     }, [])
   );
 
-  const update = (key: string, value: any) => {
-    setPreferences({ [key]: value } as any);
+  const updateProfile = (updates: Partial<ProfileData>) => {
+    const next = { ...profile, ...updates };
+    setProfile(next);
+    saveProfile(next);
+  };
+
+  // Multi-Select Toggle für Array-Felder
+  const toggleMulti = <T extends string>(
+    field: 'genders' | 'stylesV2' | 'categoriesV2',
+    value: T,
+    current: T[]
+  ) => {
+    const updated = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    setPreferences({ [field]: updated } as any);
     setPrefs(getPreferences());
   };
 
-  const toggleCategory = (cat: CategoryType) => {
-    const current = prefs.categories;
-    const updated = current.includes(cat)
-      ? current.filter((c) => c !== cat)
-      : [...current, cat];
-    update('categories', updated);
+  const updateSingle = (field: string, value: any) => {
+    setPreferences({ [field]: value } as any);
+    setPrefs(getPreferences());
+  };
+
+  const handlePickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Zugriff verweigert', 'Ondeya benötigt Zugriff auf deine Fotos, um ein Profilbild zu setzen.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      updateProfile({ avatarUri: result.assets[0].uri });
+    }
   };
 
   const handleDevReset = () => {
@@ -102,36 +188,44 @@ export default function ProfileScreen() {
     );
   };
 
-  const styleOptions: { label: string; value: StyleType }[] = [
-    { label: 'Classic & Clean', value: 'classic' },
-    { label: 'Casual & Lässig', value: 'casual' },
-    { label: 'Sporty', value: 'sporty' },
-    { label: 'Alles', value: 'mix' },
+  // Optionen
+  const genderOptions: { label: string; value: GenderType }[] = [
+    { label: 'Damen', value: 'damen' },
+    { label: 'Herren', value: 'herren' },
+    { label: 'Unisex', value: 'unisex' },
   ];
 
-  const budgetOptions: { label: string; value: BudgetType }[] = [
-    { label: 'Unter €50', value: 'under50' },
-    { label: '€50–€150', value: '50to150' },
-    { label: '€150–€300', value: '150to300' },
-    { label: 'Über €300', value: 'over300' },
+  const styleOptions: { label: string; value: StyleV2Type }[] = [
+    { label: 'Casual', value: 'casual' },
+    { label: 'Elegant', value: 'elegant' },
+    { label: 'Party', value: 'party' },
+    { label: 'Streetwear', value: 'streetwear' },
+    { label: 'Minimalistisch', value: 'minimalistisch' },
+    { label: 'Vintage', value: 'vintage' },
+    { label: 'Sportlich', value: 'sportlich' },
   ];
 
-  const discountOptions: { label: string; value: DiscountType }[] = [
-    { label: 'Ab 20%', value: '20' },
-    { label: 'Ab 30%', value: '30' },
-    { label: 'Ab 40%', value: '40' },
-    { label: 'Ab 50%', value: '50' },
+  const categoryOptions: { label: string; value: CategoryV2Type }[] = [
+    { label: 'Kleidung', value: 'kleidung' },
+    { label: 'Schuhe', value: 'schuhe' },
+    { label: 'Schmuck', value: 'schmuck' },
   ];
 
-  const sizeOptions: { label: string; value: SizeType }[] = [
-    { label: 'XS / S', value: 'xs_s' },
-    { label: 'M', value: 'm' },
-    { label: 'L / XL', value: 'l_xl' },
-    { label: 'XXL +', value: 'xxl' },
+  const priceOptions: { label: string; value: PriceRangeType }[] = [
+    { label: 'Bis 50 €', value: 'bis50' },
+    { label: '50 – 150 €', value: '50bis150' },
+    { label: '150 – 300 €', value: '150bis300' },
+    { label: 'Über 300 €', value: 'ueber300' },
+    { label: 'Egal', value: 'egal' },
   ];
 
-  const categoryOptions: { label: string; value: CategoryType }[] =
-    ACTIVE_CATEGORIES.map((c) => ({ label: c.label, value: c.value as CategoryType }));
+  const discoveryOptions: { label: string; value: DiscoveryAffinityType }[] = [
+    { label: 'Bekannte Marken', value: 0 },
+    { label: 'Mix', value: 1 },
+    { label: 'Neues entdecken', value: 2 },
+  ];
+
+  const displayName = profile.name.trim() || 'Du';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -145,14 +239,45 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Section title="Mein Stil">
+        {/* Account-Sektion */}
+        <View style={styles.accountSection}>
+          <Avatar name={displayName} uri={profile.avatarUri} onPress={handlePickAvatar} />
+          <View style={styles.accountInfo}>
+            <TextInput
+              style={styles.nameInput}
+              value={profile.name}
+              onChangeText={(text) => updateProfile({ name: text })}
+              placeholder="Dein Name"
+              placeholderTextColor={colors.taupe}
+              returnKeyType="done"
+              maxLength={40}
+            />
+            <Text style={styles.accountHint}>Dein Profil bleibt auf deinem Gerät.</Text>
+          </View>
+        </View>
+
+        {/* V2 Filter-Sektionen */}
+        <Section title="Wer trägt's?">
+          <View style={styles.chips}>
+            {genderOptions.map((o) => (
+              <SettingChip
+                key={o.value}
+                label={o.label}
+                selected={prefs.genders.includes(o.value)}
+                onPress={() => toggleMulti('genders', o.value, prefs.genders)}
+              />
+            ))}
+          </View>
+        </Section>
+
+        <Section title="Dein Stil">
           <View style={styles.chips}>
             {styleOptions.map((o) => (
               <SettingChip
                 key={o.value}
                 label={o.label}
-                selected={prefs.style === o.value}
-                onPress={() => update('style', o.value)}
+                selected={prefs.stylesV2.includes(o.value)}
+                onPress={() => toggleMulti('stylesV2', o.value, prefs.stylesV2)}
               />
             ))}
           </View>
@@ -164,47 +289,34 @@ export default function ProfileScreen() {
               <SettingChip
                 key={o.value}
                 label={o.label}
-                selected={prefs.categories.includes(o.value)}
-                onPress={() => toggleCategory(o.value)}
+                selected={prefs.categoriesV2.includes(o.value) || prefs.categoriesV2.includes('alle')}
+                onPress={() => toggleMulti('categoriesV2', o.value, prefs.categoriesV2)}
               />
             ))}
           </View>
         </Section>
 
-        <Section title="Budget pro Produkt">
+        <Section title="Preisrahmen">
           <View style={styles.chips}>
-            {budgetOptions.map((o) => (
+            {priceOptions.map((o) => (
               <SettingChip
                 key={o.value}
                 label={o.label}
-                selected={prefs.budget === o.value}
-                onPress={() => update('budget', o.value)}
+                selected={prefs.priceRange === o.value}
+                onPress={() => updateSingle('priceRange', o.value)}
               />
             ))}
           </View>
         </Section>
 
-        <Section title="Mindest-Rabatt">
+        <Section title="Entdeckungsfreude">
           <View style={styles.chips}>
-            {discountOptions.map((o) => (
+            {discoveryOptions.map((o) => (
               <SettingChip
-                key={o.value}
+                key={String(o.value)}
                 label={o.label}
-                selected={prefs.minDiscount === o.value}
-                onPress={() => update('minDiscount', o.value)}
-              />
-            ))}
-          </View>
-        </Section>
-
-        <Section title="Meine Größe">
-          <View style={styles.chips}>
-            {sizeOptions.map((o) => (
-              <SettingChip
-                key={o.value}
-                label={o.label}
-                selected={prefs.size === o.value}
-                onPress={() => update('size', o.value)}
+                selected={prefs.discoveryAffinity === o.value}
+                onPress={() => updateSingle('discoveryAffinity', o.value)}
               />
             ))}
           </View>
@@ -246,6 +358,54 @@ const styles = StyleSheet.create({
   headerSub: { color: colors.taupe, fontSize: 13 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 60, gap: 8 },
+
+  // Account
+  accountSection: {
+    backgroundColor: colors.espresso,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+  },
+  avatarWrapper: { position: 'relative' },
+  avatarImage: { width: 64, height: 64, borderRadius: 32 },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#2e2a26',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.taupe,
+  },
+  avatarInitials: { color: colors.sand, fontSize: 22, fontWeight: '700' },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.sand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarEditText: { color: colors.noir, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  accountInfo: { flex: 1, gap: 4 },
+  nameInput: {
+    color: colors.linen,
+    fontSize: 18,
+    fontWeight: '600',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138, 127, 114, 0.3)',
+  },
+  accountHint: { color: colors.taupe, fontSize: 11 },
+
+  // Sektionen
   section: {
     backgroundColor: colors.espresso,
     borderRadius: 16,
@@ -274,6 +434,7 @@ const styles = StyleSheet.create({
   },
   chipText: { color: colors.taupe, fontSize: 14, fontWeight: '500' },
   chipTextSelected: { color: colors.sand, fontWeight: '600' },
+
   infoBox: {
     backgroundColor: colors.espresso,
     borderRadius: 16,
@@ -286,7 +447,6 @@ const styles = StyleSheet.create({
   infoTitle: { color: colors.sand, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
   infoText: { color: colors.taupe, fontSize: 13, lineHeight: 20 },
 
-  // Dev Section
   devSection: {
     marginTop: 24,
     padding: 16,
