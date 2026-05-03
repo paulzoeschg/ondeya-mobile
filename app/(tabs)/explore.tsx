@@ -1,112 +1,204 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  Linking,
+  Dimensions,
+} from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { getWatchlist, removeFromWatchlist, type Product } from '../../store/watchlist-store';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function TabTwoScreen() {
+const colors = {
+  noir: '#1a1714',
+  espresso: '#3d3630',
+  taupe: '#8a7f72',
+  sand: '#c9a882',
+  linen: '#e8ddd0',
+  forest: '#2e4a3e',
+  terracotta: '#4a2e2e',
+};
+
+export default function WatchlistScreen() {
+  const [items, setItems] = useState<Product[]>([]);
+
+  // Wird jedes Mal neu geladen wenn der Tab fokussiert wird
+  useFocusEffect(
+    useCallback(() => {
+      setItems(getWatchlist());
+    }, [])
+  );
+
+  const handleRemove = (id: string) => {
+    removeFromWatchlist(id);
+    setItems(getWatchlist());
+  };
+
+  // affiliateUrl ist bereits ein CJ Affiliate Link (vom Backend generiert)
+  const handleBuy = (url: string) => {
+    Linking.openURL(url);
+  };
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.logo}>ONDEYA</Text>
+        <Text style={styles.emptyTitle}>Watchlist leer</Text>
+        <Text style={styles.emptySubtitle}>
+          Entscheide dich für Produkte nach rechts{'\n'}um sie hier zu speichern.
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.logo}>ONDEYA</Text>
+        <Text style={styles.subtitle}>{items.length} {items.length === 1 ? 'Produkt' : 'Produkte'}</Text>
+      </View>
+
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Image
+              source={{ uri: item.image }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+            <View style={styles.info}>
+              <Text style={styles.brandName}>{item.brand}</Text>
+              <Text style={styles.productName}>{item.name}</Text>
+              <Text style={styles.colorName}>{item.color}</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.salePrice}>£{item.salePrice}</Text>
+                <Text style={styles.originalPrice}>£{item.originalPrice}</Text>
+                <View style={styles.discountBadge}>
+                  <Text style={styles.discountText}>−{item.discount}%</Text>
+                </View>
+              </View>
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.buyButton}
+                  onPress={() => handleBuy(item.affiliateUrl)}
+                >
+                  <Text style={styles.buyButtonText}>Jetzt kaufen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => handleRemove(item.id)}
+                >
+                  <Text style={styles.removeButtonText}>Entfernen</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: { flex: 1, backgroundColor: colors.noir },
+  emptyContainer: {
+    flex: 1,
+    backgroundColor: colors.noir,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 40,
   },
-  titleContainer: {
+  emptyTitle: {
+    color: colors.linen,
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    color: colors.taupe,
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  header: {
+    paddingTop: 64,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
   },
+  logo: { color: colors.sand, fontSize: 20, fontWeight: '700', letterSpacing: 6 },
+  subtitle: { color: colors.taupe, fontSize: 14 },
+  list: { paddingHorizontal: 16, paddingBottom: 40 },
+  separator: { height: 12 },
+  card: {
+    backgroundColor: colors.espresso,
+    borderRadius: 16,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  productImage: {
+    width: 110,
+    height: 130,
+  },
+  info: {
+    flex: 1,
+    padding: 14,
+    gap: 3,
+    justifyContent: 'space-between',
+  },
+  brandName: {
+    color: colors.taupe,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  productName: {
+    color: colors.linen,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  colorName: { color: colors.taupe, fontSize: 12 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  salePrice: { color: colors.sand, fontSize: 18, fontWeight: '700' },
+  originalPrice: { color: colors.taupe, fontSize: 13, textDecorationLine: 'line-through' },
+  discountBadge: {
+    backgroundColor: colors.forest,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  discountText: { color: colors.linen, fontSize: 11, fontWeight: '700' },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  buyButton: {
+    backgroundColor: colors.sand,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    flex: 1,
+    alignItems: 'center',
+  },
+  buyButtonText: { color: colors.noir, fontSize: 13, fontWeight: '700' },
+  removeButton: {
+    borderWidth: 1,
+    borderColor: colors.taupe,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  removeButtonText: { color: colors.taupe, fontSize: 13, fontWeight: '500' },
 });
