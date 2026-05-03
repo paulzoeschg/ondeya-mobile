@@ -15,7 +15,6 @@ import {
   type StyleV2Type,
   type CategoryV2Type,
   type PriceRangeType,
-  type DiscoveryAffinityType,
 } from '../../store/preferences-store';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,7 +36,6 @@ type AnswersV2 = {
   stylesV2: StyleV2Type[];
   categoriesV2: CategoryV2Type[];
   priceRange: PriceRangeType | null;
-  discoveryAffinity: DiscoveryAffinityType | null;
 };
 
 type QuestionConfig =
@@ -47,7 +45,6 @@ type QuestionConfig =
       subtitle: string;
       multi: true;
       maxSelect?: number;
-      skippable?: false;
       options: { label: string; value: GenderType }[];
     }
   | {
@@ -56,7 +53,6 @@ type QuestionConfig =
       subtitle: string;
       multi: true;
       maxSelect: 3;
-      skippable?: false;
       options: { label: string; value: StyleV2Type }[];
     }
   | {
@@ -65,7 +61,6 @@ type QuestionConfig =
       subtitle: string;
       multi: true;
       maxSelect?: number;
-      skippable?: false;
       options: { label: string; value: CategoryV2Type }[];
     }
   | {
@@ -73,25 +68,16 @@ type QuestionConfig =
       title: string;
       subtitle: string;
       multi: false;
-      skippable?: false;
       options: { label: string; sub?: string; value: PriceRangeType }[];
-    }
-  | {
-      id: 'discoveryAffinity';
-      title: string;
-      subtitle: string;
-      multi: false;
-      skippable: true;
-      options: { label: string; sub?: string; value: DiscoveryAffinityType }[];
     };
 
-// --- Fragen-Definitionen (exakt nach CLAUDE.md Spec) ---
+// --- Fragen ---
 
 const questions: QuestionConfig[] = [
   {
     id: 'genders',
-    title: 'Wer trägt\'s?',
-    subtitle: 'Mehrere möglich.',
+    title: 'Ich suche für',
+    subtitle: 'Mehrfachauswahl',
     multi: true,
     options: [
       { label: 'Damen', value: 'damen' },
@@ -102,7 +88,7 @@ const questions: QuestionConfig[] = [
   {
     id: 'stylesV2',
     title: 'Dein Stil —\nwähle bis zu drei.',
-    subtitle: 'Ondeya lernt, was zu dir passt.',
+    subtitle: 'Wähle bis zu 3',
     multi: true,
     maxSelect: 3,
     options: [
@@ -118,7 +104,7 @@ const questions: QuestionConfig[] = [
   {
     id: 'categoriesV2',
     title: 'Worauf hast du\ngerade Lust?',
-    subtitle: 'Mehrere möglich.',
+    subtitle: 'Mehrfachauswahl',
     multi: true,
     options: [
       { label: 'Kleidung', value: 'kleidung' },
@@ -130,7 +116,7 @@ const questions: QuestionConfig[] = [
   {
     id: 'priceRange',
     title: 'Preisrahmen\npro Stück?',
-    subtitle: 'Ondeya zeigt dir passende Stücke.',
+    subtitle: '',
     multi: false,
     options: [
       { label: 'Bis 50 €', value: 'bis50' },
@@ -138,18 +124,6 @@ const questions: QuestionConfig[] = [
       { label: '150 – 300 €', value: '150bis300' },
       { label: 'Über 300 €', value: 'ueber300' },
       { label: 'Egal — guter Stil > Preis', value: 'egal' },
-    ],
-  },
-  {
-    id: 'discoveryAffinity',
-    title: 'Wie experimentier-\nfreudig bist du?',
-    subtitle: 'Ondeya zeigt dir gerne Marken, die du noch nicht kennst. Wieviel davon willst du?',
-    multi: false,
-    skippable: true,
-    options: [
-      { label: 'Lieber bekannte Marken', value: 0 },
-      { label: 'Mix aus beidem', value: 1 },
-      { label: 'Zeig mir, was ich noch nicht kenne', value: 2 },
     ],
   },
 ];
@@ -162,7 +136,6 @@ function getInitialAnswers(): AnswersV2 {
     stylesV2: [],
     categoriesV2: [],
     priceRange: null,
-    discoveryAffinity: null,
   };
 }
 
@@ -189,7 +162,6 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     if (q.id === 'stylesV2') return answers.stylesV2.length > 0;
     if (q.id === 'categoriesV2') return answers.categoriesV2.length > 0;
     if (q.id === 'priceRange') return answers.priceRange !== null;
-    if (q.id === 'discoveryAffinity') return answers.discoveryAffinity !== null;
     return false;
   };
 
@@ -220,10 +192,8 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       const v = value as CategoryV2Type;
       const cur = answers.categoriesV2;
       if (v === 'alle') {
-        // "Alles ist okay" deselektiert alle anderen und togglet sich selbst
         setAnswers({ ...answers, categoriesV2: cur.includes('alle') ? [] : ['alle'] });
       } else {
-        // spezifische Auswahl entfernt 'alle' automatisch
         const without_alle = cur.filter((x) => x !== 'alle');
         setAnswers({
           ...answers,
@@ -235,9 +205,6 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
 
     } else if (q.id === 'priceRange') {
       setAnswers({ ...answers, priceRange: value as PriceRangeType });
-
-    } else if (q.id === 'discoveryAffinity') {
-      setAnswers({ ...answers, discoveryAffinity: value as DiscoveryAffinityType });
     }
   };
 
@@ -260,18 +227,8 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   const goNext = () => {
     animate('forward', () => {
       if (isLast) {
-        completeOnboarding(answers);
-        onComplete();
-      } else {
-        setStep((s) => s + 1);
-      }
-    });
-  };
-
-  const skipQuestion = () => {
-    animate('forward', () => {
-      if (isLast) {
-        completeOnboarding(answers);
+        // discoveryAffinity nicht abgefragt — Standardwert "Mix aus beidem" setzen
+        completeOnboarding({ ...answers, discoveryAffinity: 1 });
         onComplete();
       } else {
         setStep((s) => s + 1);
@@ -283,8 +240,6 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     if (step === 0) return;
     animate('back', () => setStep((s) => s - 1));
   };
-
-  const maxSelectLabel = q.id === 'stylesV2' ? ' — wähle bis zu 3' : q.multi ? ' — wähle mehrere' : '';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -319,9 +274,8 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
-        <Text style={styles.stepLabel}>{step + 1} / {questions.length}{maxSelectLabel}</Text>
         <Text style={styles.questionTitle}>{q.title}</Text>
-        {q.subtitle && <Text style={styles.questionSubtitle}>{q.subtitle}</Text>}
+        {q.subtitle ? <Text style={styles.questionSubtitle}>{q.subtitle}</Text> : null}
 
         <ScrollView
           style={styles.optionsScroll}
@@ -368,11 +322,6 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
 
       {/* Footer */}
       <View style={styles.footer}>
-        {q.skippable && (
-          <TouchableOpacity onPress={skipQuestion} style={styles.skipButton}>
-            <Text style={styles.skipText}>Überspringen</Text>
-          </TouchableOpacity>
-        )}
         <TouchableOpacity
           style={[styles.nextButton, !canProceed() && styles.nextButtonDisabled]}
           onPress={goNext}
@@ -427,13 +376,6 @@ const styles = StyleSheet.create({
   questionContainer: {
     flex: 1,
   },
-  stepLabel: {
-    color: colors.taupe,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
   questionTitle: {
     color: colors.linen,
     fontSize: 30,
@@ -486,15 +428,6 @@ const styles = StyleSheet.create({
   footer: {
     paddingBottom: 32,
     paddingTop: 12,
-    gap: 10,
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  skipText: {
-    color: colors.taupe,
-    fontSize: 14,
   },
   nextButton: {
     backgroundColor: colors.sand,
