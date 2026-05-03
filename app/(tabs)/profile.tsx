@@ -19,6 +19,7 @@ import {
   type SizeType,
   type CategoryType,
 } from '../../store/preferences-store';
+import { ACTIVE_CATEGORIES } from '../../constants/categories';
 import { resetWatchlist } from '../../store/watchlist-store';
 
 const colors = {
@@ -129,11 +130,8 @@ export default function ProfileScreen() {
     { label: 'XXL +', value: 'xxl' },
   ];
 
-  const categoryOptions: { label: string; value: CategoryType }[] = [
-    { label: 'Mode', value: 'mode' },
-    { label: 'Living', value: 'living' },
-    { label: 'Lifestyle', value: 'lifestyle' },
-  ];
+  const categoryOptions: { label: string; value: CategoryType }[] =
+    ACTIVE_CATEGORIES.map((c) => ({ label: c.label, value: c.value as CategoryType }));
 
   return (
     <SafeAreaView style={styles.container}>

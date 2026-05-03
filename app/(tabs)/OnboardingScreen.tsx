@@ -9,6 +9,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { completeOnboarding, type StyleType, type CategoryType, type BudgetType, type DiscountType, type SizeType } from '../../store/preferences-store';
+import { ACTIVE_CATEGORIES } from '../../constants/categories';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -49,9 +50,7 @@ const questions = [
     subtitle: 'Mehrere möglich.',
     multi: true,
     options: [
-      { label: 'Mode', sub: 'Kleidung, Schuhe, Accessoires', value: 'mode' },
-      { label: 'Living', sub: 'Interior, Möbel, Wohnen', value: 'living' },
-      { label: 'Lifestyle', sub: 'Parfum, Sport, Technik', value: 'lifestyle' },
+      ...ACTIVE_CATEGORIES.map((c) => ({ label: c.label, sub: c.sub ?? '', value: c.value })),
     ],
   },
   {
