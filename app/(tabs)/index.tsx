@@ -23,6 +23,7 @@ import {
   type BudgetType,
   type DiscountType,
 } from '../../store/preferences-store';
+import { formatEur } from '../../utils/currency';
 import OnboardingScreen from './OnboardingScreen';
 
 // Budget-Buckets der Präferenzen → Maximalpreis (GBP, Sale-Preis)
@@ -161,8 +162,8 @@ function DetailSheet({
 
             {/* Preis */}
             <View style={styles.sheetPriceRow}>
-              <Text style={styles.sheetSalePrice}>£{product.salePrice}</Text>
-              <Text style={styles.sheetOriginalPrice}>£{product.originalPrice}</Text>
+              <Text style={styles.sheetSalePrice}>{formatEur(product.salePrice)}</Text>
+              <Text style={styles.sheetOriginalPrice}>{formatEur(product.originalPrice)}</Text>
               <View style={styles.sheetDiscountBadge}>
                 <Text style={styles.sheetDiscountText}>−{product.discount}%</Text>
               </View>
@@ -191,7 +192,7 @@ function DetailSheet({
                 onClose();
               }}
             >
-              <Text style={styles.buyButtonFullText}>Jetzt kaufen — £{product.salePrice}</Text>
+              <Text style={styles.buyButtonFullText}>Jetzt kaufen — {formatEur(product.salePrice)}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -414,8 +415,8 @@ export default function FeedScreen() {
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.colorName}>{product.color}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.salePrice}>£{product.salePrice}</Text>
-            <Text style={styles.originalPrice}>£{product.originalPrice}</Text>
+            <Text style={styles.salePrice}>{formatEur(product.salePrice)}</Text>
+            <Text style={styles.originalPrice}>{formatEur(product.originalPrice)}</Text>
           </View>
         </View>
 

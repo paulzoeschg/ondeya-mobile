@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getWatchlist, removeFromWatchlist, type Product } from '../../store/watchlist-store';
+import { formatEur } from '../../utils/currency';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -80,8 +81,8 @@ export default function WatchlistScreen() {
               <Text style={styles.productName}>{item.name}</Text>
               <Text style={styles.colorName}>{item.color}</Text>
               <View style={styles.priceRow}>
-                <Text style={styles.salePrice}>£{item.salePrice}</Text>
-                <Text style={styles.originalPrice}>£{item.originalPrice}</Text>
+                <Text style={styles.salePrice}>{formatEur(item.salePrice)}</Text>
+                <Text style={styles.originalPrice}>{formatEur(item.originalPrice)}</Text>
                 <View style={styles.discountBadge}>
                   <Text style={styles.discountText}>−{item.discount}%</Text>
                 </View>
