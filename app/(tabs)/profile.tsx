@@ -327,7 +327,6 @@ export default function ProfileScreen() {
         {/* Marken-Filter */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Diese Marken zeigt dir Ondeya</Text>
-          <Text style={styles.sectionHint}>Schalte einzelne Marken aus, wenn du sie nicht sehen möchtest.</Text>
           {BRAND_PARTNERS.map((partner) => {
             const isEnabled = !prefs.disabledBrands.includes(partner.label);
             return (

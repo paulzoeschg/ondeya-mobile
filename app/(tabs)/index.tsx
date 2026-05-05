@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -28,6 +29,9 @@ import {
 } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
 import OnboardingScreen from './OnboardingScreen';
+import MechanicsIntro from '../../components/MechanicsIntro';
+
+const MECHANICS_INTRO_KEY = '@ondeya_mechanics_intro_seen';
 
 const PRICE_RANGE_TO_MAX: Record<PriceRangeType, number | undefined> = {
   bis50: 50,
@@ -222,6 +226,7 @@ export default function FeedScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showMechanicsIntro, setShowMechanicsIntro] = useState(false);
   const [cards, setCards] = useState<Product[]>([]);
   const [showNav, setShowNav] = useState(false);
   const navAnim = useRef(new Animated.Value(0)).current;
@@ -231,7 +236,15 @@ export default function FeedScreen() {
     async function init() {
       await loadPreferences();
       await loadWatchlist();
-      setShowOnboarding(!isOnboardingDone());
+      const onboardingDone = isOnboardingDone();
+      setShowOnboarding(!onboardingDone);
+
+      // Mechanics-Intro nur beim allerersten Start (nach Onboarding)
+      if (onboardingDone) {
+        const seen = await AsyncStorage.getItem(MECHANICS_INTRO_KEY);
+        if (!seen) setShowMechanicsIntro(true);
+      }
+
       try {
         const apiProducts = await fetchProducts({ limit: 50, ...preferenceFilters() });
         const prefs = getPreferences();
@@ -493,7 +506,14 @@ export default function FeedScreen() {
   }
 
   if (showOnboarding) {
-    return <OnboardingScreen onComplete={() => setShowOnboarding(false)} />;
+    return (
+      <OnboardingScreen
+        onComplete={() => {
+          setShowOnboarding(false);
+          setShowMechanicsIntro(true);
+        }}
+      />
+    );
   }
 
   if (cards.length === 0) {
@@ -511,9 +531,18 @@ export default function FeedScreen() {
   const navTranslateY = navAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
   const navOpacity = navAnim;
 
+  const handleDismissMechanicsIntro = async () => {
+    await AsyncStorage.setItem(MECHANICS_INTRO_KEY, '1');
+    setShowMechanicsIntro(false);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {showMechanicsIntro && (
+        <MechanicsIntro onDismiss={handleDismissMechanicsIntro} />
+      )}
 
       <View style={styles.cardContainer}>
         {visibleCards.map((product, index) => {

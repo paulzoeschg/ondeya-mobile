@@ -12,14 +12,22 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { getWatchlist, removeFromWatchlist, type Product } from '../../store/watchlist-store';
 import { getPreferences, isProductDisabled } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
+
+const GRID_PADDING = 12;
+const GRID_GAP = 8;
+const CARD_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.35); // leicht hochkant
+const SWIPE_THRESHOLD = CARD_WIDTH * 0.35;
 
 const colors = {
   noir: '#1a1714',
@@ -28,59 +36,59 @@ const colors = {
   sand: '#c9a882',
   linen: '#e8ddd0',
   forest: '#2e4a3e',
-  forestLight: '#4a8a6e',
   terracotta: '#4a2e2e',
-  terracottaLight: '#9a5f5f',
 };
 
-// --- Detail-Sheet ---
+// ── Detail-Sheet ──────────────────────────────────────────────────────────────
 
 function DetailSheet({ item, onClose }: { item: Product; onClose: () => void }) {
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <View style={sheet.overlay}>
-        <View style={sheet.container}>
-          <TouchableOpacity style={sheet.closeArea} onPress={onClose} activeOpacity={1} />
-          <View style={sheet.content}>
-            <View style={sheet.handle} />
-            <TouchableOpacity style={sheet.closeBtn} onPress={onClose}>
-              <Text style={sheet.closeBtnText}>✕</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={sheet.closeArea} onPress={onClose} activeOpacity={1} />
+        <View style={sheet.content}>
+          <View style={sheet.handle} />
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Image source={{ uri: item.image }} style={sheet.image} resizeMode="cover" />
-              <View style={sheet.body}>
-                <Text style={sheet.brand}>{item.brand}</Text>
-                <Text style={sheet.name}>{item.name}</Text>
-                {item.color ? <Text style={sheet.color}>{item.color}</Text> : null}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Image source={{ uri: item.image }} style={sheet.image} resizeMode="cover" />
+            <View style={sheet.body}>
+              <Text style={sheet.brand}>{item.brand.toUpperCase()}</Text>
+              <Text style={sheet.name}>{item.name}</Text>
+              {item.color ? <Text style={sheet.color}>{item.color}</Text> : null}
 
-                <View style={sheet.priceRow}>
-                  <Text style={sheet.salePrice}>{formatEur(item.salePrice)}</Text>
-                  {item.originalPrice > item.salePrice && (
-                    <Text style={sheet.originalPrice}>{formatEur(item.originalPrice)}</Text>
-                  )}
-                  {item.discount > 0 && (
-                    <View style={sheet.badge}>
-                      <Text style={sheet.badgeText}>−{item.discount}%</Text>
-                    </View>
-                  )}
-                </View>
-
-                {item.description ? (
-                  <Text style={sheet.description}>{item.description}</Text>
-                ) : null}
+              <View style={sheet.priceRow}>
+                <Text style={sheet.salePrice}>{formatEur(item.salePrice)}</Text>
+                {item.originalPrice > item.salePrice && (
+                  <Text style={sheet.originalPrice}>{formatEur(item.originalPrice)}</Text>
+                )}
+                {item.discount > 0 && (
+                  <View style={sheet.badge}>
+                    <Text style={sheet.badgeText}>−{item.discount}%</Text>
+                  </View>
+                )}
               </View>
-            </ScrollView>
-          </View>
+
+              {item.description ? (
+                <Text style={sheet.description}>{item.description}</Text>
+              ) : null}
+
+              <TouchableOpacity
+                style={sheet.buyButton}
+                onPress={() => item.affiliateUrl && Linking.openURL(item.affiliateUrl)}
+              >
+                <Text style={sheet.buyButtonText}>Jetzt kaufen — {formatEur(item.salePrice)}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
   );
 }
 
-// --- Swipeable Karte ---
+// ── Swipeable Mini-Karte ──────────────────────────────────────────────────────
 
-function SwipeableCard({
+function GridCard({
   item,
   onRemove,
   onBuy,
@@ -91,38 +99,44 @@ function SwipeableCard({
   onBuy: () => void;
   onTap: () => void;
 }) {
-  const position = useRef(new Animated.ValueXY()).current;
+  const translateX = useRef(new Animated.Value(0)).current;
   const swipeProgress = useRef(new Animated.Value(0)).current;
+  const isAnimating = useRef(false);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onMoveShouldSetPanResponder: (_, g) =>
+        !isAnimating.current &&
+        Math.abs(g.dx) > 6 &&
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
       onPanResponderGrant: () => {
-        position.setOffset({ x: (position.x as any)._value, y: 0 });
-        position.setValue({ x: 0, y: 0 });
+        translateX.setOffset((translateX as any)._value);
+        translateX.setValue(0);
       },
       onPanResponderMove: (_, g) => {
-        position.x.setValue(g.dx);
-        swipeProgress.setValue(g.dx / SCREEN_WIDTH);
+        translateX.setValue(g.dx);
+        swipeProgress.setValue(g.dx / CARD_WIDTH);
       },
       onPanResponderRelease: (_, g) => {
-        position.flattenOffset();
+        translateX.flattenOffset();
         if (g.dx > SWIPE_THRESHOLD) {
-          Animated.timing(position, {
-            toValue: { x: SCREEN_WIDTH * 1.4, y: 0 },
-            duration: 250,
+          isAnimating.current = true;
+          Animated.timing(translateX, {
+            toValue: SCREEN_WIDTH,
+            duration: 220,
             useNativeDriver: true,
           }).start(() => onBuy());
         } else if (g.dx < -SWIPE_THRESHOLD) {
-          Animated.timing(position, {
-            toValue: { x: -SCREEN_WIDTH * 1.4, y: 0 },
-            duration: 250,
+          isAnimating.current = true;
+          Animated.timing(translateX, {
+            toValue: -SCREEN_WIDTH,
+            duration: 220,
             useNativeDriver: true,
           }).start(() => onRemove());
         } else {
-          Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
+          Animated.spring(translateX, {
+            toValue: 0,
             useNativeDriver: true,
             tension: 80,
             friction: 8,
@@ -138,48 +152,54 @@ function SwipeableCard({
     })
   ).current;
 
-  const buyOpacity = swipeProgress.interpolate({ inputRange: [0, 0.3], outputRange: [0, 1], extrapolate: 'clamp' });
-  const removeOpacity = swipeProgress.interpolate({ inputRange: [-0.3, 0], outputRange: [1, 0], extrapolate: 'clamp' });
+  const buyOverlayOpacity = swipeProgress.interpolate({
+    inputRange: [0, 0.35],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const removeOverlayOpacity = swipeProgress.interpolate({
+    inputRange: [-0.35, 0],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   return (
     <Animated.View
-      style={[styles.cardWrapper, { transform: [{ translateX: position.x }] }]}
+      style={[styles.cardOuter, { transform: [{ translateX }] }]}
       {...panResponder.panHandlers}
     >
-      {/* Hintergrund-Overlays */}
-      <Animated.View style={[styles.overlayRight, { opacity: buyOpacity }]}>
-        <Text style={styles.overlayText}>→ Kaufen</Text>
+      {/* Buy-Overlay (rechts) */}
+      <Animated.View style={[styles.swipeOverlay, styles.swipeOverlayRight, { opacity: buyOverlayOpacity }]}>
+        <Text style={styles.swipeOverlayText}>→</Text>
       </Animated.View>
-      <Animated.View style={[styles.overlayLeft, { opacity: removeOpacity }]}>
-        <Text style={styles.overlayText}>Entfernen ←</Text>
+
+      {/* Remove-Overlay (links) */}
+      <Animated.View style={[styles.swipeOverlay, styles.swipeOverlayLeft, { opacity: removeOverlayOpacity }]}>
+        <Text style={styles.swipeOverlayText}>←</Text>
       </Animated.View>
 
       {/* Karten-Inhalt */}
       <TouchableOpacity activeOpacity={0.9} onPress={onTap} style={styles.card}>
-        <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
-        <View style={styles.info}>
-          <Text style={styles.brandName}>{item.brand}</Text>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          {item.color ? <Text style={styles.colorName}>{item.color}</Text> : null}
-          <View style={styles.priceRow}>
-            <Text style={styles.salePrice}>{formatEur(item.salePrice)}</Text>
-            {item.originalPrice > item.salePrice && (
-              <Text style={styles.originalPrice}>{formatEur(item.originalPrice)}</Text>
-            )}
-            {item.discount > 0 && (
-              <View style={styles.discountBadge}>
-                <Text style={styles.discountText}>−{item.discount}%</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.swipeHint}>← entfernen · kaufen →</Text>
-        </View>
+        <Image
+          source={{ uri: item.image }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(26,23,20,0.85)']}
+          style={styles.cardGradient}
+          start={{ x: 0, y: 0.45 }}
+          end={{ x: 0, y: 1 }}
+        >
+          <Text style={styles.cardBrand} numberOfLines={1}>{item.brand}</Text>
+          <Text style={styles.cardPrice}>{formatEur(item.salePrice)}</Text>
+        </LinearGradient>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-// --- Watchlist Screen ---
+// ── Watchlist Screen ──────────────────────────────────────────────────────────
 
 export default function WatchlistScreen() {
   const [items, setItems] = useState<Product[]>([]);
@@ -195,150 +215,149 @@ export default function WatchlistScreen() {
 
   const handleRemove = (id: string) => {
     removeFromWatchlist(id);
-    setItems(getWatchlist());
+    const prefs = getPreferences();
+    const all = getWatchlist();
+    setItems(all.filter((p) => !isProductDisabled(p.id, prefs.disabledBrands)));
   };
 
   const handleBuy = (url: string) => {
     if (url) Linking.openURL(url);
   };
 
-  if (items.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.logo}>ONDEYA</Text>
-        <Text style={styles.emptyTitle}>Watchlist leer</Text>
-        <Text style={styles.emptySubtitle}>
-          Entscheide dich für Produkte nach rechts{'\n'}um sie hier zu speichern.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+
       {detailItem && (
         <DetailSheet item={detailItem} onClose={() => setDetailItem(null)} />
       )}
 
-      <View style={styles.header}>
-        <Text style={styles.logo}>ONDEYA</Text>
-        <Text style={styles.subtitle}>{items.length} {items.length === 1 ? 'Produkt' : 'Produkte'}</Text>
-      </View>
+      {items.length === 0 ? (
+        <SafeAreaView style={styles.emptyWrapper}>
+          <Text style={styles.logo}>ONDEYA</Text>
+          <Text style={styles.emptyTitle}>Noch nichts gespeichert.</Text>
+          <Text style={styles.emptySubtitle}>
+            Entscheide im Feed was dir gefällt{'\n'}und es landet hier.
+          </Text>
+        </SafeAreaView>
+      ) : (
+        <>
+          <SafeAreaView style={styles.headerWrapper}>
+            <Text style={styles.logo}>ONDEYA</Text>
+            <Text style={styles.headerCount}>
+              {items.length} {items.length === 1 ? 'Produkt' : 'Produkte'}
+            </Text>
+          </SafeAreaView>
 
-      <FlatList
-        data={items}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => (
-          <SwipeableCard
-            item={item}
-            onRemove={() => handleRemove(item.id)}
-            onBuy={() => handleBuy(item.affiliateUrl)}
-            onTap={() => setDetailItem(item)}
+          <FlatList
+            data={items}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            contentContainerStyle={styles.grid}
+            columnWrapperStyle={styles.row}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <GridCard
+                item={item}
+                onRemove={() => handleRemove(item.id)}
+                onBuy={() => handleBuy(item.affiliateUrl)}
+                onTap={() => setDetailItem(item)}
+              />
+            )}
           />
-        )}
-      />
+        </>
+      )}
     </View>
   );
 }
 
-// --- Styles ---
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.noir },
-  emptyContainer: {
+
+  // Leer-Zustand
+  emptyWrapper: {
     flex: 1,
-    backgroundColor: colors.noir,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 40,
   },
-  emptyTitle: { color: colors.linen, fontSize: 20, fontWeight: '600', marginTop: 8 },
-  emptySubtitle: { color: colors.taupe, fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  header: {
-    paddingTop: 64,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  logo: { color: colors.sand, fontSize: 20, fontWeight: '700', letterSpacing: 6 },
-  subtitle: { color: colors.taupe, fontSize: 14 },
-  list: { paddingHorizontal: 16, paddingBottom: 40 },
-  separator: { height: 12 },
+  emptyTitle: { color: colors.linen, fontSize: 18, fontWeight: '600', marginTop: 16 },
+  emptySubtitle: { color: colors.taupe, fontSize: 14, textAlign: 'center', lineHeight: 22 },
 
-  cardWrapper: {
-    position: 'relative',
-    borderRadius: 16,
+  // Header
+  headerWrapper: { paddingHorizontal: GRID_PADDING, paddingBottom: 8 },
+  logo: { color: colors.sand, fontSize: 20, fontWeight: '700', letterSpacing: 6, marginBottom: 2 },
+  headerCount: { color: colors.taupe, fontSize: 13 },
+
+  // Grid
+  grid: { paddingHorizontal: GRID_PADDING, paddingBottom: 48 },
+  row: { gap: GRID_GAP, marginBottom: GRID_GAP },
+
+  // Karte
+  cardOuter: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 14,
     overflow: 'hidden',
+    backgroundColor: colors.espresso,
   },
-  overlayRight: {
+  swipeOverlay: {
     ...StyleSheet.absoluteFillObject,
+    borderRadius: 14,
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  swipeOverlayRight: {
     backgroundColor: colors.forest,
-    borderRadius: 16,
-    justifyContent: 'center',
     alignItems: 'flex-end',
-    paddingRight: 24,
-    zIndex: 1,
+    paddingRight: 18,
   },
-  overlayLeft: {
-    ...StyleSheet.absoluteFillObject,
+  swipeOverlayLeft: {
     backgroundColor: colors.terracotta,
-    borderRadius: 16,
-    justifyContent: 'center',
     alignItems: 'flex-start',
-    paddingLeft: 24,
-    zIndex: 1,
+    paddingLeft: 18,
   },
-  overlayText: {
+  swipeOverlayText: {
     color: colors.linen,
-    fontSize: 15,
+    fontSize: 20,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
   card: {
-    backgroundColor: colors.espresso,
-    borderRadius: 16,
-    overflow: 'hidden',
-    flexDirection: 'row',
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
     zIndex: 2,
   },
-  productImage: { width: 110, height: 130 },
-  info: { flex: 1, padding: 14, gap: 3, justifyContent: 'space-between' },
-  brandName: {
+  cardGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 32,
+  },
+  cardBrand: {
     color: colors.taupe,
     fontSize: 10,
     fontWeight: '600',
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
+    marginBottom: 2,
   },
-  productName: { color: colors.linen, fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
-  colorName: { color: colors.taupe, fontSize: 12 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  salePrice: { color: colors.sand, fontSize: 18, fontWeight: '700' },
-  originalPrice: { color: colors.taupe, fontSize: 13, textDecorationLine: 'line-through' },
-  discountBadge: {
-    backgroundColor: colors.forest,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  discountText: { color: colors.linen, fontSize: 11, fontWeight: '700' },
-  swipeHint: { color: colors.taupe, fontSize: 11, opacity: 0.6 },
+  cardPrice: { color: colors.linen, fontSize: 15, fontWeight: '700' },
 });
 
 const sheet = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  container: { flex: 1, justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
   closeArea: { flex: 1 },
   content: {
     backgroundColor: colors.espresso,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '85%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '88%',
   },
   handle: {
     width: 36,
@@ -347,20 +366,26 @@ const sheet = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: 4,
     opacity: 0.5,
   },
-  closeBtn: { position: 'absolute', top: 16, right: 20, padding: 4, zIndex: 10 },
-  closeBtnText: { color: colors.taupe, fontSize: 18, fontWeight: '600' },
-  image: { width: '100%', height: 280, backgroundColor: colors.noir },
-  body: { padding: 20, gap: 6 },
-  brand: { color: colors.taupe, fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase' },
-  name: { color: colors.linen, fontSize: 20, fontWeight: '700', letterSpacing: -0.5, lineHeight: 26 },
+  image: { width: '100%', height: 300, backgroundColor: colors.noir },
+  body: { padding: 20, gap: 6, paddingBottom: 40 },
+  brand: { color: colors.taupe, fontSize: 11, fontWeight: '600', letterSpacing: 1.5 },
+  name: { color: colors.linen, fontSize: 20, fontWeight: '700', letterSpacing: -0.4, lineHeight: 26 },
   color: { color: colors.taupe, fontSize: 13 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6, marginBottom: 4 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
   salePrice: { color: colors.sand, fontSize: 24, fontWeight: '700' },
   originalPrice: { color: colors.taupe, fontSize: 15, textDecorationLine: 'line-through' },
   badge: { backgroundColor: colors.forest, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText: { color: colors.linen, fontSize: 12, fontWeight: '700' },
-  description: { color: colors.linen, fontSize: 14, lineHeight: 22, marginTop: 8, opacity: 0.85 },
+  description: { color: colors.linen, fontSize: 14, lineHeight: 22, marginTop: 6, opacity: 0.85 },
+  buyButton: {
+    backgroundColor: colors.sand,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  buyButtonText: { color: colors.noir, fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
 });
