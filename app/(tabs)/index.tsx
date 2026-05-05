@@ -23,6 +23,7 @@ import {
   isOnboardingDone,
   loadPreferences,
   subscribePreferences,
+  isProductDisabled,
   type PriceRangeType,
 } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
@@ -233,7 +234,9 @@ export default function FeedScreen() {
       setShowOnboarding(!isOnboardingDone());
       try {
         const apiProducts = await fetchProducts({ limit: 50, ...preferenceFilters() });
-        setCards(apiProducts);
+        const prefs = getPreferences();
+        const filtered = apiProducts.filter((p) => !isProductDisabled(p.id, prefs.disabledBrands));
+        setCards(filtered);
       } catch (e) {
         console.warn('[Feed] Backend nicht erreichbar:', e);
       }

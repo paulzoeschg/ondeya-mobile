@@ -21,6 +21,7 @@ export type Preferences = {
   categoriesV2: CategoryV2Type[];
   priceRange: PriceRangeType | null;
   discoveryAffinity: DiscoveryAffinityType | null;
+  disabledBrands: string[]; // Partner-Namen die im Feed ausgeblendet werden
 
   // Veraltete Felder — nicht mehr im Onboarding, noch im Profil lesbar
   style: StyleType | null;
@@ -34,12 +35,36 @@ export type Preferences = {
 
 const STORAGE_KEY = '@ondeya_preferences';
 
+// Partner (Quellen) im System — Key = angezeigter Name, Value = Produkt-ID-Präfix
+export const BRAND_PARTNERS: { label: string; idPrefix: string }[] = [
+  { label: 'Lyle & Scott', idPrefix: 'lyle-scott-' },
+  { label: 'Undiemeister', idPrefix: 'undiemeister-' },
+  { label: 'Shoes for Crews', idPrefix: 'shoesforcrews-' },
+  { label: 'Bademantelparadies', idPrefix: 'bademantelparadies-' },
+  { label: 'DiamondOro', idPrefix: 'diamondoro-' },
+  { label: 'Footshop', idPrefix: 'footshop-' },
+  { label: 'TOUS', idPrefix: 'tous-' },
+  { label: 'Darienzo Collezioni', idPrefix: 'darienzo-' },
+];
+
+export function getPartnerLabel(productId: string): string {
+  const partner = BRAND_PARTNERS.find((b) => productId.startsWith(b.idPrefix));
+  return partner?.label ?? '';
+}
+
+export function isProductDisabled(productId: string, disabledBrands: string[]): boolean {
+  if (disabledBrands.length === 0) return false;
+  const label = getPartnerLabel(productId);
+  return label !== '' && disabledBrands.includes(label);
+}
+
 const defaultPreferences: Preferences = {
   genders: [],
   stylesV2: [],
   categoriesV2: [],
   priceRange: null,
   discoveryAffinity: null,
+  disabledBrands: [],
 
   style: null,
   categories: [],

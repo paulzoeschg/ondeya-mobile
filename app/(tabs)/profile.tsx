@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   Image,
+  Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,6 +18,7 @@ import {
   getPreferences,
   setPreferences,
   resetPreferences,
+  BRAND_PARTNERS,
   type GenderType,
   type StyleV2Type,
   type CategoryV2Type,
@@ -322,6 +324,33 @@ export default function ProfileScreen() {
           </View>
         </Section>
 
+        {/* Marken-Filter */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Diese Marken zeigt dir Ondeya</Text>
+          <Text style={styles.sectionHint}>Schalte einzelne Marken aus, wenn du sie nicht sehen möchtest.</Text>
+          {BRAND_PARTNERS.map((partner) => {
+            const isEnabled = !prefs.disabledBrands.includes(partner.label);
+            return (
+              <View key={partner.label} style={styles.brandRow}>
+                <Text style={styles.brandLabel}>{partner.label}</Text>
+                <Switch
+                  value={isEnabled}
+                  onValueChange={(enabled) => {
+                    const updated = enabled
+                      ? prefs.disabledBrands.filter((b) => b !== partner.label)
+                      : [...prefs.disabledBrands, partner.label];
+                    setPreferences({ disabledBrands: updated });
+                    setPrefs(getPreferences());
+                  }}
+                  trackColor={{ false: 'rgba(138, 127, 114, 0.25)', true: 'rgba(46, 74, 62, 0.6)' }}
+                  thumbColor={isEnabled ? colors.forest : colors.taupe}
+                  ios_backgroundColor="rgba(138, 127, 114, 0.2)"
+                />
+              </View>
+            );
+          })}
+        </View>
+
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>Wie Ondeya lernt</Text>
           <Text style={styles.infoText}>
@@ -421,6 +450,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sectionHint: { color: colors.taupe, fontSize: 12, lineHeight: 18, marginBottom: 4 },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138, 127, 114, 0.1)',
+  },
+  brandLabel: { color: colors.linen, fontSize: 15, fontWeight: '500' },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

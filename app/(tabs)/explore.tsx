@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getWatchlist, removeFromWatchlist, type Product } from '../../store/watchlist-store';
+import { getPreferences, isProductDisabled } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -186,7 +187,9 @@ export default function WatchlistScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setItems(getWatchlist());
+      const prefs = getPreferences();
+      const all = getWatchlist();
+      setItems(all.filter((p) => !isProductDisabled(p.id, prefs.disabledBrands)));
     }, [])
   );
 
