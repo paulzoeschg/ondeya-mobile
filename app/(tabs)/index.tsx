@@ -59,7 +59,20 @@ function preferenceFilters(): FetchProductsParams {
   if (prefs.selectedJewelryTypes && prefs.selectedJewelryTypes.length > 0) {
     filters.jewelryType = prefs.selectedJewelryTypes.join(',');
   }
-  filters.audience = prefs.showKids ? 'erwachsen,kids' : 'erwachsen';
+  if (prefs.selectedApparelTypes && prefs.selectedApparelTypes.length > 0) {
+    filters.apparelType = prefs.selectedApparelTypes.join(',');
+  }
+  // Kids-SubGender filtert NUR Kids-Produkte. Wenn beide aktiv (Default), kein Filter setzen.
+  if (
+    prefs.selectedGenders.includes('kids') &&
+    prefs.selectedKidsSubGenders &&
+    prefs.selectedKidsSubGenders.length > 0 &&
+    prefs.selectedKidsSubGenders.length < 2
+  ) {
+    filters.kidsSubGender = prefs.selectedKidsSubGenders.join(',');
+  }
+  // Wenn Kids im Gender-Filter ist, audience entsprechend setzen.
+  filters.audience = prefs.selectedGenders.includes('kids') || prefs.showKids ? 'erwachsen,kids' : 'erwachsen';
   return filters;
 }
 

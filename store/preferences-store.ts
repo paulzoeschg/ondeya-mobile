@@ -1,5 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { SubcategoryValue, JewelryTypeValue, GenderValue } from '../constants/categories';
+import type {
+  SubcategoryValue,
+  JewelryTypeValue,
+  GenderValue,
+  ApparelTypeValue,
+  KidsSubGenderValue,
+} from '../constants/categories';
 
 // V2 Typen (Quiz V2, 2026-04-29 — Onboarding-Antworten)
 export type GenderType = GenderValue;
@@ -23,12 +29,14 @@ export type Preferences = {
   priceRange: PriceRangeType | null;
   disabledBrands: string[]; // Partner-Namen die im Feed ausgeblendet werden
 
-  // Taxonomie-Filter (Filter & Kategorie-Overhaul, 2026-05-08)
+  // Taxonomie-Filter (Filter & Kategorie-Overhaul, 2026-05-08, erweitert 2026-05-09)
   // Diese Felder steuern den Feed direkt, gespeist aus Profil-Screen + Onboarding.
   selectedGenders: GenderValue[];
   selectedSubcategories: SubcategoryValue[];
   selectedJewelryTypes: JewelryTypeValue[];
-  showKids: boolean; // Kids-Inhalte opt-in, default false
+  selectedApparelTypes: ApparelTypeValue[];
+  selectedKidsSubGenders: KidsSubGenderValue[]; // wirksam nur wenn 'kids' in selectedGenders
+  showKids: boolean; // legacy, bleibt vorerst für Kompatibilität
 
   // Veraltete Felder — nicht mehr im Onboarding, noch im Profil lesbar
   style: StyleType | null;
@@ -73,6 +81,8 @@ const defaultPreferences: Preferences = {
   selectedGenders: [],
   selectedSubcategories: [],
   selectedJewelryTypes: [],
+  selectedApparelTypes: [],
+  selectedKidsSubGenders: ['maedchen', 'jungen'], // Default: beide aktiv wenn Kids gewählt
   showKids: false,
 
   style: null,

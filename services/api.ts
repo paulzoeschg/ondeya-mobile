@@ -21,10 +21,12 @@ export interface FetchProductsParams {
   category?: string;       // 'mode' | 'living' | 'lifestyle' (komma-getrennt)
   maxPrice?: number;       // Sale-Preis Obergrenze
   minDiscount?: number;    // Mindest-Rabatt in Prozent
-  gender?: string;         // 'herren' | 'damen' | 'unisex' (komma-getrennt; herren/damen aktiviert auto-unisex im Backend)
+  gender?: string;         // 'herren' | 'damen' | 'unisex' | 'kids' (komma-getrennt; herren/damen aktiviert auto-unisex im Backend)
   subcategory?: string;    // 'bekleidung' | 'unterwaesche' | 'schuhe' | 'schmuck' (komma-getrennt)
   audience?: string;       // 'erwachsen' | 'kids'
   jewelryType?: string;    // 'ringe' | 'ketten' | 'armbaender' | 'ohrringe' | 'anhaenger' | 'sonstiges' (komma-getrennt)
+  apparelType?: string;    // 'jeans' | 'hosen' | ... (komma-getrennt)
+  kidsSubGender?: string;  // 'maedchen' | 'jungen' (komma-getrennt; nur wirksam wenn gender 'kids' enthält)
   page?: number;
   limit?: number;
 }
@@ -41,6 +43,8 @@ export async function fetchProducts(params: FetchProductsParams = {}): Promise<P
   if (params.subcategory) url.searchParams.set('subcategory', params.subcategory);
   if (params.audience) url.searchParams.set('audience', params.audience);
   if (params.jewelryType) url.searchParams.set('jewelryType', params.jewelryType);
+  if (params.apparelType) url.searchParams.set('apparelType', params.apparelType);
+  if (params.kidsSubGender) url.searchParams.set('kidsSubGender', params.kidsSubGender);
   if (params.page) url.searchParams.set('page', String(params.page));
   if (params.limit) url.searchParams.set('limit', String(params.limit));
 

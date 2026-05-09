@@ -26,9 +26,13 @@ import {
   GENDERS,
   SUBCATEGORIES,
   JEWELRY_TYPES,
+  APPAREL_TYPES,
+  KIDS_SUBGENDERS,
   type GenderValue,
   type SubcategoryValue,
   type JewelryTypeValue,
+  type ApparelTypeValue,
+  type KidsSubGenderValue,
 } from '../../constants/categories';
 import { resetWatchlist } from '../../store/watchlist-store';
 
@@ -144,10 +148,13 @@ export default function ProfileScreen() {
   const toggleSubcategory = (value: SubcategoryValue) => {
     const curr = prefs.selectedSubcategories;
     const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
-    // Wenn Schmuck deaktiviert wird → JewelryType-Filter zurücksetzen, sonst übrig gebliebene Auswahl wirkt weiter.
+    // Wenn Schmuck/Bekleidung deaktiviert wird → jeweiligen Subtyp-Filter zurücksetzen.
     const updates: Partial<typeof prefs> = { selectedSubcategories: updated };
     if (value === 'schmuck' && !updated.includes('schmuck')) {
       updates.selectedJewelryTypes = [];
+    }
+    if (value === 'bekleidung' && !updated.includes('bekleidung')) {
+      updates.selectedApparelTypes = [];
     }
     setPreferences(updates);
     setPrefs(getPreferences());
@@ -157,6 +164,20 @@ export default function ProfileScreen() {
     const curr = prefs.selectedJewelryTypes;
     const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
     setPreferences({ selectedJewelryTypes: updated });
+    setPrefs(getPreferences());
+  };
+
+  const toggleApparelType = (value: ApparelTypeValue) => {
+    const curr = prefs.selectedApparelTypes;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    setPreferences({ selectedApparelTypes: updated });
+    setPrefs(getPreferences());
+  };
+
+  const toggleKidsSubGender = (value: KidsSubGenderValue) => {
+    const curr = prefs.selectedKidsSubGenders;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    setPreferences({ selectedKidsSubGenders: updated });
     setPrefs(getPreferences());
   };
 
@@ -227,6 +248,8 @@ export default function ProfileScreen() {
   ];
 
   const showJewelryTypes = prefs.selectedSubcategories.includes('schmuck');
+  const showApparelTypes = prefs.selectedSubcategories.includes('bekleidung');
+  const showKidsSubGenders = prefs.selectedGenders.includes('kids');
   const displayName = profile.name.trim() || 'Du';
 
   return (
@@ -269,6 +292,21 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
+          {showKidsSubGenders && (
+            <View style={styles.subSection}>
+              <Text style={styles.subSectionLabel}>Kids verfeinern</Text>
+              <View style={styles.chips}>
+                {KIDS_SUBGENDERS.map((k) => (
+                  <SettingChip
+                    key={k.value}
+                    label={k.label}
+                    selected={prefs.selectedKidsSubGenders.includes(k.value)}
+                    onPress={() => toggleKidsSubGender(k.value)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </Section>
 
         <Section title="Was zeigt dir Ondeya?">
@@ -282,6 +320,21 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
+          {showApparelTypes && (
+            <View style={styles.subSection}>
+              <Text style={styles.subSectionLabel}>Welche Bekleidungs-Arten?</Text>
+              <View style={styles.chips}>
+                {APPAREL_TYPES.map((a) => (
+                  <SettingChip
+                    key={a.value}
+                    label={a.label}
+                    selected={prefs.selectedApparelTypes.includes(a.value)}
+                    onPress={() => toggleApparelType(a.value)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
           {showJewelryTypes && (
             <View style={styles.subSection}>
               <Text style={styles.subSectionLabel}>Schmuck verfeinern</Text>
