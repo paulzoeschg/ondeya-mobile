@@ -15,6 +15,10 @@ export type Product = {
   category: string;
   currency?: string;
   ondeyaCategory?: 'mode' | 'living' | 'lifestyle';
+  gender: 'herren' | 'damen' | 'unisex' | 'pending';
+  audience: 'erwachsen' | 'kids';
+  subcategory: 'bekleidung' | 'unterwaesche' | 'schuhe' | 'schmuck';
+  jewelryType?: 'ringe' | 'ketten' | 'armbaender' | 'ohrringe' | 'anhaenger' | 'sonstiges';
   details?: string[];
 };
 

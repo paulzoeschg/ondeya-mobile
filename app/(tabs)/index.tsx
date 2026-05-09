@@ -8,6 +8,7 @@ import {
   Dimensions,
   StatusBar,
   Image,
+  ImageBackground,
   Linking,
   Modal,
   TouchableOpacity,
@@ -44,13 +45,30 @@ const PRICE_RANGE_TO_MAX: Record<PriceRangeType, number | undefined> = {
 function preferenceFilters(): FetchProductsParams {
   const prefs = getPreferences();
   const filters: FetchProductsParams = {};
-
   if (prefs.priceRange && prefs.priceRange !== 'egal') {
     const max = PRICE_RANGE_TO_MAX[prefs.priceRange];
     if (max !== undefined) filters.maxPrice = max;
   }
-
+  if (prefs.selectedGenders && prefs.selectedGenders.length > 0) {
+    filters.gender = prefs.selectedGenders.join(',');
+  }
+  if (prefs.selectedSubcategories && prefs.selectedSubcategories.length > 0) {
+    filters.subcategory = prefs.selectedSubcategories.join(',');
+  }
+  if (prefs.selectedJewelryTypes && prefs.selectedJewelryTypes.length > 0) {
+    filters.jewelryType = prefs.selectedJewelryTypes.join(',');
+  }
+  filters.audience = prefs.showKids ? 'erwachsen,kids' : 'erwachsen';
   return filters;
+}
+
+// Nur noch disabledBrands client-seitig filtern — Gender/Subcategory kommen vom Backend
+function passesClientFilters(
+  product: Product,
+  prefs: { disabledBrands: string[] }
+): boolean {
+  if (isProductDisabled(product.id, prefs.disabledBrands)) return false;
+  return true;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -88,8 +106,8 @@ function DetailSheet({
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        damping: 20,
-        stiffness: 200,
+        damping: 14,
+        stiffness: 180,
       }).start();
     } else {
       Animated.timing(slideAnim, {
@@ -100,7 +118,6 @@ function DetailSheet({
     }
   }, [visible]);
 
-  // Swipe-down-to-close auf dem Handle
   const swipeCloseResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -113,27 +130,22 @@ function DetailSheet({
 
   if (!product) return null;
 
+  const hasDiscount = product.discount > 0 && product.originalPrice > product.salePrice;
+
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
-      {/* Schwarzes Backdrop — kein Tap-to-close */}
       <View style={styles.backdrop} />
 
-      {/* ONDEYA Logo sichtbar über dem Backdrop */}
       <View style={[styles.sheetLogoArea, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.sheetLogoText}>ONDEYA</Text>
       </View>
 
-      {/* Sheet — nur nach unten wischen schließt */}
-      <Animated.View
-        style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
-      >
-        {/* Handle — trägt den Swipe-down-Responder */}
+      <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
         <View style={styles.sheetHandleArea} {...swipeCloseResponder.panHandlers}>
           <View style={styles.sheetHandle} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Bildgalerie */}
           <ScrollView
             horizontal
             pagingEnabled
@@ -144,28 +156,18 @@ function DetailSheet({
             }}
           >
             {product.images.map((img, i) => (
-              <Image
-                key={i}
-                source={{ uri: img }}
-                style={styles.sheetImage}
-                resizeMode="cover"
-              />
+              <Image key={i} source={{ uri: img }} style={styles.sheetImage} resizeMode="cover" />
             ))}
           </ScrollView>
 
-          {/* Bild-Dots */}
           {product.images.length > 1 && (
             <View style={styles.dots}>
               {product.images.map((_, i) => (
-                <View
-                  key={i}
-                  style={[styles.dot, i === activeImage && styles.dotActive]}
-                />
+                <View key={i} style={[styles.dot, i === activeImage && styles.dotActive]} />
               ))}
             </View>
           )}
 
-          {/* Produktinfo */}
           <View style={styles.sheetContent}>
             <View style={styles.sheetBrandRow}>
               <Text style={styles.sheetBrand}>{product.brand.toUpperCase()}</Text>
@@ -177,13 +179,19 @@ function DetailSheet({
 
             <View style={styles.sheetPriceRow}>
               <Text style={styles.sheetSalePrice}>{formatEur(product.salePrice)}</Text>
-              <Text style={styles.sheetOriginalPrice}>{formatEur(product.originalPrice)}</Text>
-              <View style={styles.sheetDiscountBadge}>
-                <Text style={styles.sheetDiscountText}>−{product.discount}%</Text>
-              </View>
+              {hasDiscount && (
+                <>
+                  <Text style={styles.sheetOriginalPrice}>{formatEur(product.originalPrice)}</Text>
+                  <View style={styles.sheetDiscountBadge}>
+                    <Text style={styles.sheetDiscountText}>−{product.discount}%</Text>
+                  </View>
+                </>
+              )}
             </View>
 
-            <Text style={styles.sheetDescription}>{product.description}</Text>
+            {product.description ? (
+              <Text style={styles.sheetDescription}>{product.description}</Text>
+            ) : null}
 
             {product.details && product.details.length > 0 && (
               <View style={styles.detailsList}>
@@ -231,7 +239,17 @@ export default function FeedScreen() {
   const [showNav, setShowNav] = useState(false);
   const navAnim = useRef(new Animated.Value(0)).current;
 
-  // Beim Start: Präferenzen + Produkte vom Backend laden
+  const loadFeed = async () => {
+    try {
+      const apiProducts = await fetchProducts({ limit: 50, ...preferenceFilters() });
+      const prefs = getPreferences();
+      const filtered = apiProducts.filter((p) => passesClientFilters(p, prefs));
+      setCards(filtered);
+    } catch (e) {
+      console.warn('[Feed] Backend nicht erreichbar:', e);
+    }
+  };
+
   useEffect(() => {
     async function init() {
       await loadPreferences();
@@ -239,45 +257,35 @@ export default function FeedScreen() {
       const onboardingDone = isOnboardingDone();
       setShowOnboarding(!onboardingDone);
 
-      // Mechanics-Intro nur beim allerersten Start (nach Onboarding)
       if (onboardingDone) {
         const seen = await AsyncStorage.getItem(MECHANICS_INTRO_KEY);
         if (!seen) setShowMechanicsIntro(true);
       }
 
-      try {
-        const apiProducts = await fetchProducts({ limit: 50, ...preferenceFilters() });
-        const prefs = getPreferences();
-        const filtered = apiProducts.filter((p) => !isProductDisabled(p.id, prefs.disabledBrands));
-        setCards(filtered);
-      } catch (e) {
-        console.warn('[Feed] Backend nicht erreichbar:', e);
-      }
+      await loadFeed();
       setIsLoading(false);
     }
     init();
   }, []);
 
-  // Auf Reset reagieren (Profil-Screen Dev-Button)
+  // Auf Präferenz-Änderungen reagieren — neuen API-Call mit aktualisierten Filtern
   useEffect(() => {
     const unsubscribe = subscribePreferences(() => {
       setShowOnboarding(!isOnboardingDone());
+      loadFeed();
     });
-    return () => {
-      unsubscribe();
-    };
+    return () => { unsubscribe(); };
   }, []);
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
 
-  // Ref damit PanResponder immer die aktuellen cards sieht
   const cardsRef = useRef<Product[]>([]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
 
-  // Jede Karte bekommt ihre eigene Animated-Position. So kontaminiert die
-  // wegfliegende Karte nicht die nachfolgende — kein Snap, kein Erben einer
-  // off-screen-Position.
+  const previousCardRef = useRef<Product | null>(null);
+
   const positionsRef = useRef<Map<string, Animated.ValueXY>>(new Map());
   const getPosition = (id: string): Animated.ValueXY => {
     let pos = positionsRef.current.get(id);
@@ -291,6 +299,11 @@ export default function FeedScreen() {
   const actionOpacity = useRef(new Animated.Value(0)).current;
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = useRef(false);
+  const touchStartYRef = useRef(0);
+  const touchStartXRef = useRef(0);
+  const openNavRef = useRef<() => void>(() => {});
+  const openDetailSheetRef = useRef<() => void>(() => {});
+  const goBackRef = useRef<() => void>(() => {});
 
   const showActionFeedback = (action: string) => {
     setLastAction(action);
@@ -316,27 +329,25 @@ export default function FeedScreen() {
     if (route !== '/') router.push(route as any);
   };
 
-  // Ref damit PanResponder immer die neueste swipeCard-Funktion aufruft
   const swipeCardRef = useRef<(direction: 'left' | 'right' | 'up' | 'down') => void>(() => {});
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (_, gesture) => {
         isDragging.current = false;
-        longPressTimer.current = setTimeout(() => {
-          if (!isDragging.current) {
-            setSelectedProduct(cardsRef.current[0] ?? null);
-            setSheetVisible(true);
-          }
-        }, 400);
+        touchStartYRef.current = gesture.y0;
+        touchStartXRef.current = gesture.x0;
+        if (gesture.y0 > SCREEN_HEIGHT * 0.8) {
+          longPressTimer.current = setTimeout(() => {
+            if (!isDragging.current) openNavRef.current();
+          }, 400);
+        }
       },
       onPanResponderMove: (_, gesture) => {
         if (Math.abs(gesture.dx) > 5 || Math.abs(gesture.dy) > 5) {
           isDragging.current = true;
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-          }
+          if (longPressTimer.current) clearTimeout(longPressTimer.current);
         }
         const topId = cardsRef.current[0]?.id;
         if (!topId) return;
@@ -345,16 +356,16 @@ export default function FeedScreen() {
       onPanResponderRelease: (_, gesture) => {
         if (longPressTimer.current) clearTimeout(longPressTimer.current);
         if (isDragging.current) {
-          if (gesture.dx > SWIPE_THRESHOLD) {
-            swipeCardRef.current('right');
-          } else if (gesture.dx < -SWIPE_THRESHOLD) {
-            swipeCardRef.current('left');
-          } else if (gesture.dy < -SWIPE_THRESHOLD) {
-            swipeCardRef.current('up');
-          } else if (gesture.dy > SWIPE_THRESHOLD) {
-            swipeCardRef.current('down');
-          } else {
-            resetPosition();
+          if (gesture.dx > SWIPE_THRESHOLD) swipeCardRef.current('right');
+          else if (gesture.dx < -SWIPE_THRESHOLD) swipeCardRef.current('left');
+          else if (gesture.dy < -SWIPE_THRESHOLD) swipeCardRef.current('up');
+          else if (gesture.dy > SWIPE_THRESHOLD) swipeCardRef.current('down');
+          else resetPosition();
+        } else {
+          if (touchStartXRef.current < 80 && touchStartYRef.current < 100) {
+            goBackRef.current();
+          } else if (touchStartYRef.current <= SCREEN_HEIGHT * 0.8) {
+            openDetailSheetRef.current();
           }
         }
       },
@@ -364,6 +375,9 @@ export default function FeedScreen() {
   const swipeCard = (direction: 'left' | 'right' | 'up' | 'down') => {
     const currentCard = cardsRef.current[0];
     if (!currentCard) return;
+
+    previousCardRef.current = currentCard;
+
     if (direction === 'right') {
       addToWatchlist(currentCard);
       showActionFeedback('Zur Watchlist hinzugefügt');
@@ -392,8 +406,20 @@ export default function FeedScreen() {
     });
   };
 
-  // swipeCardRef immer aktuell halten
+  const goBack = () => {
+    const prev = previousCardRef.current;
+    if (!prev) return;
+    previousCardRef.current = null;
+    setCards((current) => [prev, ...current]);
+  };
+
   swipeCardRef.current = swipeCard;
+  openNavRef.current = openNav;
+  goBackRef.current = goBack;
+  openDetailSheetRef.current = () => {
+    setSelectedProduct(cardsRef.current[0] ?? null);
+    setSheetVisible(true);
+  };
 
   const resetPosition = () => {
     const topId = cardsRef.current[0]?.id;
@@ -429,9 +455,7 @@ export default function FeedScreen() {
       extrapolate: 'clamp',
     });
 
-    const shortDescription = product.description
-      ? product.description.split('.')[0].trim()
-      : '';
+    const hasDiscount = product.discount > 0;
 
     return (
       <Animated.View
@@ -439,47 +463,47 @@ export default function FeedScreen() {
         style={[
           styles.card,
           {
-            transform: [
-              { translateX: pos.x },
-              { translateY: pos.y },
-              { rotate },
-            ],
+            transform: [{ translateX: pos.x }, { translateY: pos.y }, { rotate }],
             zIndex: isTop ? 10 : 1,
           },
         ]}
         {...(isTop ? panResponder.panHandlers : {})}
       >
-        {/* Vollscreen Produktbild */}
-        <Image source={{ uri: product.image }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+        {/* Blur-Hintergrund: dasselbe Bild, stark geblurt + abgedunkelt */}
+        <ImageBackground
+          source={{ uri: product.image }}
+          style={StyleSheet.absoluteFillObject}
+          blurRadius={25}
+        >
+          <View style={styles.blurOverlay} />
+        </ImageBackground>
 
-        {/* Gradient — nur unteres Drittel, von transparent nach dunkel */}
+        {/* Produktbild vorne: contain mit 5% horizontalem Abstand — nie abgeschnitten */}
+        <Image source={{ uri: product.image }} style={styles.cardImage} resizeMode="contain" />
+
+        {/* Dezenter Gradient — nur unterste 15% für Lesbarkeit des Preises */}
         <LinearGradient
-          colors={['transparent', 'rgba(26,23,20,0.55)', 'rgba(26,23,20,0.88)']}
-          locations={[0, 0.5, 1]}
+          colors={['transparent', 'rgba(26,23,20,0.85)']}
+          locations={[0, 1]}
           style={styles.cardGradient}
         />
 
-        {/* Logo-Overlay oben */}
         <View style={[styles.cardTopBar, { paddingTop: insets.top + 12 }]}>
           <Text style={styles.cardLogo}>ONDEYA</Text>
         </View>
 
-        {/* Produktinfo — unten */}
         <View style={styles.cardBottom}>
           <View style={styles.cardPriceRow}>
             <Text style={styles.cardSalePrice}>{formatEur(product.salePrice)}</Text>
-            {product.discount > 0 && (
+            {hasDiscount && (
               <View style={styles.cardDiscountBadge}>
                 <Text style={styles.cardDiscountText}>−{product.discount}%</Text>
               </View>
             )}
           </View>
-          {shortDescription ? (
-            <Text style={styles.cardDescription} numberOfLines={2} ellipsizeMode="tail">{shortDescription}</Text>
-          ) : null}
+          <Text style={styles.cardCategoryLabel}>{product.category}</Text>
         </View>
 
-        {/* Wisch-Overlays */}
         {isTop && (
           <>
             <Animated.View style={[styles.overlay, styles.likeOverlay, { opacity: likeOpacity }]}>
@@ -517,17 +541,41 @@ export default function FeedScreen() {
   }
 
   if (cards.length === 0) {
+    const navTranslateYEmpty = navAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}
+        onLongPress={() => openNav()}
+        delayLongPress={400}
+      >
         <Text style={styles.feedLogo}>ONDEYA</Text>
         <Text style={{ color: colors.linen, fontSize: 18 }}>Alle Stücke gesehen.</Text>
         <Text style={{ color: colors.taupe, fontSize: 15 }}>Schau morgen wieder vorbei.</Text>
-      </View>
+        <TouchableOpacity
+          onPress={() => { setIsLoading(true); loadFeed().then(() => setIsLoading(false)); }}
+          style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, backgroundColor: colors.sand }}
+        >
+          <Text style={{ color: colors.noir, fontSize: 15, fontWeight: '600' }}>Nochmal entdecken</Text>
+        </TouchableOpacity>
+        {showNav && (
+          <Animated.View style={[styles.navBar, { opacity: navAnim, transform: [{ translateY: navTranslateYEmpty }] }]}>
+            <TouchableOpacity style={styles.navItem} onPress={() => closeNav()}>
+              <Text style={styles.navItemText}>Feed</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/(tabs)/explore'); }}>
+              <Text style={styles.navItemText}>Watchlist</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/(tabs)/profile'); }}>
+              <Text style={styles.navItemText}>Profil</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+      </TouchableOpacity>
     );
   }
 
   const visibleCards = cards.slice(0, 2).reverse();
-
   const navTranslateY = navAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
   const navOpacity = navAnim;
 
@@ -557,20 +605,6 @@ export default function FeedScreen() {
         </Animated.View>
       )}
 
-      {/* Nav-Trigger: unsichtbarer Bereich unten Mitte — lang drücken öffnet Nav */}
-      <View
-        style={styles.navTrigger}
-        onStartShouldSetResponder={() => false}
-      >
-        <TouchableOpacity
-          style={styles.navTriggerTouch}
-          onLongPress={openNav}
-          delayLongPress={400}
-          activeOpacity={1}
-        />
-      </View>
-
-      {/* Floating Nav-Overlay */}
       {showNav && (
         <TouchableOpacity style={styles.navBackdrop} activeOpacity={1} onPress={closeNav}>
           <Animated.View style={[styles.navBar, { opacity: navOpacity, transform: [{ translateY: navTranslateY }] }]}>
@@ -625,16 +659,29 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.espresso,
+    backgroundColor: colors.noir,
     overflow: 'hidden',
   },
+  // Blur-Overlay: abdunkelt das geblurte Hintergrundbild
+  blurOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26, 23, 20, 0.5)',
+  },
+  // Produktbild: contain + 5% horizontaler Abstand — kein sichtbarer Kasten, kein Abschneiden
+  cardImage: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: SCREEN_WIDTH * 0.05,
+    right: SCREEN_WIDTH * 0.05,
+  },
+  // Dezenter Gradient — nur ~15% der Kartenhöhe für Textlesbarkeit
   cardGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '45%',
-    backgroundColor: 'rgba(26, 23, 20, 0.72)',
+    height: '15%',
   },
   cardTopBar: {
     position: 'absolute',
@@ -651,7 +698,7 @@ const styles = StyleSheet.create({
     left: 24,
     right: 24,
     zIndex: 5,
-    gap: 6,
+    gap: 4,
   },
   cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardSalePrice: { color: colors.linen, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
@@ -662,29 +709,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   cardDiscountText: { color: colors.linen, fontSize: 14, fontWeight: '700' },
-  cardDescription: { color: 'rgba(232, 221, 208, 0.75)', fontSize: 14, lineHeight: 20 },
+  cardCategoryLabel: { color: 'rgba(232, 221, 208, 0.7)', fontSize: 14, lineHeight: 20 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 20 },
   likeOverlay: { backgroundColor: 'rgba(46, 74, 62, 0.78)' },
   skipOverlay: { backgroundColor: 'rgba(74, 46, 46, 0.78)' },
   buyOverlay: { backgroundColor: 'rgba(201, 168, 130, 0.88)' },
   overlayText: { color: colors.linen, fontSize: 22, fontWeight: '700', letterSpacing: 3 },
 
-  // Nav Trigger + Overlay
-  navTrigger: {
-    position: 'absolute',
-    bottom: 0,
-    left: SCREEN_WIDTH / 2 - 60,
-    width: 120,
-    height: 70,
-    zIndex: 50,
-  },
-  navTriggerTouch: { flex: 1 },
   navBackdrop: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 60,
     justifyContent: 'flex-end',
     paddingBottom: 24,
@@ -700,11 +734,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(138, 127, 114, 0.3)',
     gap: 4,
   },
-  navItem: {
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 18,
-  },
+  navItem: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 18 },
   navItemText: { color: colors.taupe, fontSize: 15, fontWeight: '600' },
   navItemActive: { color: colors.sand },
 
@@ -714,22 +744,12 @@ const styles = StyleSheet.create({
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.95)',
   },
-  sheetLogoArea: {
-    position: 'absolute',
-    top: 0,
-    left: 24,
-    zIndex: 10,
-  },
+  sheetLogoArea: { position: 'absolute', top: 0, left: 24, zIndex: 10 },
   sheetLogoText: { color: colors.sand, fontSize: 18, fontWeight: '700', letterSpacing: 5 },
-  sheetHandleArea: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
+  sheetHandleArea: { paddingVertical: 16, alignItems: 'center' },
   sheet: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     backgroundColor: colors.espresso,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -737,29 +757,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetHandle: {
-    width: 36,
+    width: 40,
     height: 4,
     backgroundColor: colors.taupe,
     borderRadius: 2,
-    opacity: 0.5,
+    opacity: 0.75,
   },
-  sheetImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 1.1,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.taupe,
-    opacity: 0.4,
-  },
+  sheetImage: { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.1 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.taupe, opacity: 0.4 },
   dotActive: { backgroundColor: colors.sand, opacity: 1 },
   sheetContent: { padding: 24, gap: 10, paddingBottom: 48 },
   sheetBrandRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

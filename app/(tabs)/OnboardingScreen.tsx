@@ -107,7 +107,8 @@ const questions: QuestionConfig[] = [
     subtitle: 'Mehrfachauswahl',
     multi: true,
     options: [
-      { label: 'Kleidung', value: 'kleidung' },
+      { label: 'Bekleidung', value: 'bekleidung' },
+      { label: 'Unterwäsche & Loungewear', value: 'unterwaesche' },
       { label: 'Schuhe', value: 'schuhe' },
       { label: 'Schmuck', value: 'schmuck' },
       { label: 'Alles ist okay', value: 'alle' },
@@ -227,8 +228,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   const goNext = () => {
     animate('forward', () => {
       if (isLast) {
-        // discoveryAffinity nicht abgefragt — Standardwert "Mix aus beidem" setzen
-        completeOnboarding({ ...answers, discoveryAffinity: 1 });
+        completeOnboarding(answers);
         onComplete();
       } else {
         setStep((s) => s + 1);

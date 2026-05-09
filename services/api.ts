@@ -21,6 +21,10 @@ export interface FetchProductsParams {
   category?: string;       // 'mode' | 'living' | 'lifestyle' (komma-getrennt)
   maxPrice?: number;       // Sale-Preis Obergrenze
   minDiscount?: number;    // Mindest-Rabatt in Prozent
+  gender?: string;         // 'herren' | 'damen' | 'unisex' (komma-getrennt; herren/damen aktiviert auto-unisex im Backend)
+  subcategory?: string;    // 'bekleidung' | 'unterwaesche' | 'schuhe' | 'schmuck' (komma-getrennt)
+  audience?: string;       // 'erwachsen' | 'kids'
+  jewelryType?: string;    // 'ringe' | 'ketten' | 'armbaender' | 'ohrringe' | 'anhaenger' | 'sonstiges' (komma-getrennt)
   page?: number;
   limit?: number;
 }
@@ -33,6 +37,10 @@ export async function fetchProducts(params: FetchProductsParams = {}): Promise<P
   if (params.category) url.searchParams.set('category', params.category);
   if (params.maxPrice !== undefined) url.searchParams.set('maxPrice', String(params.maxPrice));
   if (params.minDiscount !== undefined) url.searchParams.set('minDiscount', String(params.minDiscount));
+  if (params.gender) url.searchParams.set('gender', params.gender);
+  if (params.subcategory) url.searchParams.set('subcategory', params.subcategory);
+  if (params.audience) url.searchParams.set('audience', params.audience);
+  if (params.jewelryType) url.searchParams.set('jewelryType', params.jewelryType);
   if (params.page) url.searchParams.set('page', String(params.page));
   if (params.limit) url.searchParams.set('limit', String(params.limit));
 

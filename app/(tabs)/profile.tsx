@@ -19,13 +19,17 @@ import {
   setPreferences,
   resetPreferences,
   BRAND_PARTNERS,
-  type GenderType,
   type StyleV2Type,
-  type CategoryV2Type,
   type PriceRangeType,
-  type DiscoveryAffinityType,
 } from '../../store/preferences-store';
-import { ACTIVE_CATEGORIES } from '../../constants/categories';
+import {
+  GENDERS,
+  SUBCATEGORIES,
+  JEWELRY_TYPES,
+  type GenderValue,
+  type SubcategoryValue,
+  type JewelryTypeValue,
+} from '../../constants/categories';
 import { resetWatchlist } from '../../store/watchlist-store';
 
 const PROFILE_STORAGE_KEY = '@ondeya_profile';
@@ -44,8 +48,6 @@ const colors = {
   forest: '#2e4a3e',
   terracotta: '#4a2e2e',
 };
-
-// --- Subkomponenten ---
 
 function SettingChip({
   label,
@@ -101,8 +103,6 @@ function Avatar({ name, uri, onPress }: { name: string; uri: string | null; onPr
   );
 }
 
-// --- Profil-Daten laden/speichern (lokal, kein Backend) ---
-
 async function loadProfile(): Promise<ProfileData> {
   try {
     const raw = await AsyncStorage.getItem(PROFILE_STORAGE_KEY);
@@ -116,8 +116,6 @@ async function saveProfile(data: ProfileData): Promise<void> {
     await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
   } catch (_) {}
 }
-
-// --- Screen ---
 
 export default function ProfileScreen() {
   const [prefs, setPrefs] = useState(getPreferences());
@@ -136,21 +134,41 @@ export default function ProfileScreen() {
     saveProfile(next);
   };
 
-  // Multi-Select Toggle für Array-Felder
-  const toggleMulti = <T extends string>(
-    field: 'genders' | 'stylesV2' | 'categoriesV2',
-    value: T,
-    current: T[]
-  ) => {
-    const updated = current.includes(value)
-      ? current.filter((v) => v !== value)
-      : [...current, value];
-    setPreferences({ [field]: updated } as any);
+  const toggleGender = (value: GenderValue) => {
+    const curr = prefs.selectedGenders;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    setPreferences({ selectedGenders: updated });
     setPrefs(getPreferences());
   };
 
-  const updateSingle = (field: string, value: any) => {
-    setPreferences({ [field]: value } as any);
+  const toggleSubcategory = (value: SubcategoryValue) => {
+    const curr = prefs.selectedSubcategories;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    // Wenn Schmuck deaktiviert wird → JewelryType-Filter zurücksetzen, sonst übrig gebliebene Auswahl wirkt weiter.
+    const updates: Partial<typeof prefs> = { selectedSubcategories: updated };
+    if (value === 'schmuck' && !updated.includes('schmuck')) {
+      updates.selectedJewelryTypes = [];
+    }
+    setPreferences(updates);
+    setPrefs(getPreferences());
+  };
+
+  const toggleJewelryType = (value: JewelryTypeValue) => {
+    const curr = prefs.selectedJewelryTypes;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    setPreferences({ selectedJewelryTypes: updated });
+    setPrefs(getPreferences());
+  };
+
+  const toggleStyle = (value: StyleV2Type) => {
+    const curr = prefs.stylesV2;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    setPreferences({ stylesV2: updated });
+    setPrefs(getPreferences());
+  };
+
+  const updatePriceRange = (value: PriceRangeType) => {
+    setPreferences({ priceRange: value });
     setPrefs(getPreferences());
   };
 
@@ -190,13 +208,6 @@ export default function ProfileScreen() {
     );
   };
 
-  // Optionen
-  const genderOptions: { label: string; value: GenderType }[] = [
-    { label: 'Damen', value: 'damen' },
-    { label: 'Herren', value: 'herren' },
-    { label: 'Unisex', value: 'unisex' },
-  ];
-
   const styleOptions: { label: string; value: StyleV2Type }[] = [
     { label: 'Casual', value: 'casual' },
     { label: 'Elegant', value: 'elegant' },
@@ -207,12 +218,6 @@ export default function ProfileScreen() {
     { label: 'Sportlich', value: 'sportlich' },
   ];
 
-  const categoryOptions: { label: string; value: CategoryV2Type }[] = [
-    { label: 'Kleidung', value: 'kleidung' },
-    { label: 'Schuhe', value: 'schuhe' },
-    { label: 'Schmuck', value: 'schmuck' },
-  ];
-
   const priceOptions: { label: string; value: PriceRangeType }[] = [
     { label: 'Bis 50 €', value: 'bis50' },
     { label: '50 – 150 €', value: '50bis150' },
@@ -221,12 +226,7 @@ export default function ProfileScreen() {
     { label: 'Egal', value: 'egal' },
   ];
 
-  const discoveryOptions: { label: string; value: DiscoveryAffinityType }[] = [
-    { label: 'Bekannte Marken', value: 0 },
-    { label: 'Mix', value: 1 },
-    { label: 'Neues entdecken', value: 2 },
-  ];
-
+  const showJewelryTypes = prefs.selectedSubcategories.includes('schmuck');
   const displayName = profile.name.trim() || 'Du';
 
   return (
@@ -258,18 +258,45 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* V2 Filter-Sektionen */}
         <Section title="Wer trägt's?">
           <View style={styles.chips}>
-            {genderOptions.map((o) => (
+            {GENDERS.map((g) => (
               <SettingChip
-                key={o.value}
-                label={o.label}
-                selected={prefs.genders.includes(o.value)}
-                onPress={() => toggleMulti('genders', o.value, prefs.genders)}
+                key={g.value}
+                label={g.label}
+                selected={prefs.selectedGenders.includes(g.value)}
+                onPress={() => toggleGender(g.value)}
               />
             ))}
           </View>
+        </Section>
+
+        <Section title="Was zeigt dir Ondeya?">
+          <View style={styles.chips}>
+            {SUBCATEGORIES.map((s) => (
+              <SettingChip
+                key={s.value}
+                label={s.label}
+                selected={prefs.selectedSubcategories.includes(s.value)}
+                onPress={() => toggleSubcategory(s.value)}
+              />
+            ))}
+          </View>
+          {showJewelryTypes && (
+            <View style={styles.subSection}>
+              <Text style={styles.subSectionLabel}>Schmuck verfeinern</Text>
+              <View style={styles.chips}>
+                {JEWELRY_TYPES.map((j) => (
+                  <SettingChip
+                    key={j.value}
+                    label={j.label}
+                    selected={prefs.selectedJewelryTypes.includes(j.value)}
+                    onPress={() => toggleJewelryType(j.value)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </Section>
 
         <Section title="Dein Stil">
@@ -279,20 +306,7 @@ export default function ProfileScreen() {
                 key={o.value}
                 label={o.label}
                 selected={prefs.stylesV2.includes(o.value)}
-                onPress={() => toggleMulti('stylesV2', o.value, prefs.stylesV2)}
-              />
-            ))}
-          </View>
-        </Section>
-
-        <Section title="Kategorien">
-          <View style={styles.chips}>
-            {categoryOptions.map((o) => (
-              <SettingChip
-                key={o.value}
-                label={o.label}
-                selected={prefs.categoriesV2.includes(o.value) || prefs.categoriesV2.includes('alle')}
-                onPress={() => toggleMulti('categoriesV2', o.value, prefs.categoriesV2)}
+                onPress={() => toggleStyle(o.value)}
               />
             ))}
           </View>
@@ -305,26 +319,28 @@ export default function ProfileScreen() {
                 key={o.value}
                 label={o.label}
                 selected={prefs.priceRange === o.value}
-                onPress={() => updateSingle('priceRange', o.value)}
+                onPress={() => updatePriceRange(o.value)}
               />
             ))}
           </View>
         </Section>
 
-        <Section title="Entdeckungsfreude">
-          <View style={styles.chips}>
-            {discoveryOptions.map((o) => (
-              <SettingChip
-                key={String(o.value)}
-                label={o.label}
-                selected={prefs.discoveryAffinity === o.value}
-                onPress={() => updateSingle('discoveryAffinity', o.value)}
-              />
-            ))}
+        <View style={styles.section}>
+          <View style={styles.brandRow}>
+            <Text style={styles.brandLabel}>Auch Kindermode zeigen</Text>
+            <Switch
+              value={prefs.showKids}
+              onValueChange={(val) => {
+                setPreferences({ showKids: val });
+                setPrefs(getPreferences());
+              }}
+              trackColor={{ false: 'rgba(138, 127, 114, 0.25)', true: 'rgba(46, 74, 62, 0.6)' }}
+              thumbColor={prefs.showKids ? colors.forest : colors.taupe}
+              ios_backgroundColor="rgba(138, 127, 114, 0.2)"
+            />
           </View>
-        </Section>
+        </View>
 
-        {/* Marken-Filter */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Diese Marken zeigt dir Ondeya</Text>
           {BRAND_PARTNERS.map((partner) => {
@@ -387,7 +403,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 60, gap: 8 },
 
-  // Account
   accountSection: {
     backgroundColor: colors.espresso,
     borderRadius: 16,
@@ -433,7 +448,6 @@ const styles = StyleSheet.create({
   },
   accountHint: { color: colors.taupe, fontSize: 11 },
 
-  // Sektionen
   section: {
     backgroundColor: colors.espresso,
     borderRadius: 16,
@@ -448,8 +462,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
+  subSection: { marginTop: 12, gap: 10 },
+  subSectionLabel: {
+    color: colors.sand,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  sectionHint: { color: colors.taupe, fontSize: 12, lineHeight: 18, marginBottom: 4 },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
