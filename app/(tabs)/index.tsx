@@ -29,6 +29,7 @@ import {
   type PriceRangeType,
 } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
+import { subcategoryLabel } from '../../constants/categories';
 import OnboardingScreen from './OnboardingScreen';
 import MechanicsIntro from '../../components/MechanicsIntro';
 
@@ -171,7 +172,7 @@ function DetailSheet({
           <View style={styles.sheetContent}>
             <View style={styles.sheetBrandRow}>
               <Text style={styles.sheetBrand}>{product.brand.toUpperCase()}</Text>
-              <Text style={styles.sheetCategory}>{product.category}</Text>
+              <Text style={styles.sheetCategory}>{subcategoryLabel(product.subcategory)}</Text>
             </View>
 
             <Text style={styles.sheetName}>{product.name}</Text>
@@ -501,7 +502,9 @@ export default function FeedScreen() {
               </View>
             )}
           </View>
-          <Text style={styles.cardCategoryLabel}>{product.category}</Text>
+          {subcategoryLabel(product.subcategory) !== '' && (
+            <Text style={styles.cardCategoryLabel}>{subcategoryLabel(product.subcategory)}</Text>
+          )}
         </View>
 
         {isTop && (

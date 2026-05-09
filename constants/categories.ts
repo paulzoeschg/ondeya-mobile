@@ -35,6 +35,20 @@ export const SUBCATEGORIES: SubcategoryDefinition[] = [
   { value: 'schmuck', label: 'Schmuck' },
 ];
 
+// Display-Helper für Produktkarten und Detail-Sheet.
+// pending oder unbekannt → leerer String, kein "Mode"-Fallback mehr.
+const SUBCATEGORY_LABEL_MAP: Record<string, string> = {
+  bekleidung: 'Bekleidung',
+  unterwaesche: 'Unterwäsche & Loungewear',
+  schuhe: 'Schuhe',
+  schmuck: 'Schmuck',
+};
+
+export function subcategoryLabel(subcategory: string | undefined): string {
+  if (!subcategory) return '';
+  return SUBCATEGORY_LABEL_MAP[subcategory] ?? '';
+}
+
 // ── Schmuck-Unterkategorien (jewelryType) ───────────────────────────────────
 export type JewelryTypeValue = 'ringe' | 'ketten' | 'armbaender' | 'ohrringe' | 'anhaenger' | 'sonstiges';
 
