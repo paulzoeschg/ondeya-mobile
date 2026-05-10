@@ -18,7 +18,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { addToWatchlist, loadWatchlist, type Product } from '../../store/watchlist-store';
+import {
+  addToWatchlist,
+  loadWatchlist,
+  getWatchlist,
+  getDismissedIds,
+  subscribeWatchlist,
+  type Product,
+} from '../../store/watchlist-store';
 import { fetchProducts, type FetchProductsParams } from '../../services/api';
 import {
   getPreferences,
@@ -29,7 +36,12 @@ import {
   type PriceRangeType,
 } from '../../store/preferences-store';
 import { formatEur } from '../../utils/currency';
-import { subcategoryLabel } from '../../constants/categories';
+import {
+  subcategoryLabel,
+  genderLabel,
+  apparelTypeLabel,
+  jewelryTypeLabel,
+} from '../../constants/categories';
 import OnboardingScreen from './OnboardingScreen';
 import MechanicsIntro from '../../components/MechanicsIntro';
 
@@ -244,6 +256,42 @@ function DetailSheet({
   );
 }
 
+// Briefing v2 2026-05-10 (Aufgabe C): Aktive Subtyp-Filter werden im Karten-Bottom
+// als zweite Label-Zeile angezeigt (z.B. „Damen · Hosen"). Reines Feedback,
+// keine Interaktion — Filter werden ausschließlich im Profil verändert.
+function buildActiveFilterDescription(): string {
+  const prefs = getPreferences();
+  const parts: string[] = [];
+  if (prefs.selectedGenders.length > 0 && prefs.selectedGenders.length < 4) {
+    parts.push(prefs.selectedGenders.map((g) => genderLabel(g) || g).join(' / '));
+  }
+  if (prefs.selectedApparelTypes.length > 0) {
+    parts.push(prefs.selectedApparelTypes.map((a) => apparelTypeLabel(a) || a).join(' / '));
+  }
+  if (prefs.selectedJewelryTypes.length > 0) {
+    parts.push(prefs.selectedJewelryTypes.map((j) => jewelryTypeLabel(j) || j).join(' / '));
+  }
+  return parts.join(' · ');
+}
+
+// Briefing 2026-05-10 (Aufgabe 7): Page-Size für Initial-Load und Folgeseiten.
+// Backend caped intern bei 200 (auch wenn wir mehr anfragen würden).
+const PAGE_SIZE = 200;
+// Schwelle, ab der die nächste Page nachgeladen wird.
+const LOAD_MORE_THRESHOLD = 10;
+
+function applyFeedOrdering(apiProducts: Product[], prefs: { disabledBrands: string[] }): Product[] {
+  const watchlistIds = new Set(getWatchlist().map((p) => p.id));
+  const dismissed = getDismissedIds();
+  const filtered = apiProducts
+    .filter((p) => !watchlistIds.has(p.id))
+    .filter((p) => passesClientFilters(p, prefs));
+  // Niedrige Priorität: aktiv aus Watchlist entfernte Produkte ans Ende.
+  const high = filtered.filter((p) => !dismissed.has(p.id));
+  const low = filtered.filter((p) => dismissed.has(p.id));
+  return [...high, ...low];
+}
+
 export default function FeedScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -253,15 +301,64 @@ export default function FeedScreen() {
   const [showNav, setShowNav] = useState(false);
   const navAnim = useRef(new Animated.Value(0)).current;
 
-  const loadFeed = async () => {
+  // Briefing 2026-05-10 (Aufgabe 7+9): Pagination-State.
+  // currentPageRef wird synchron via Ref geführt, damit loadMorePage nicht in
+  // veralteten Closures hängen bleibt; allLoadedRef analog.
+  const currentPageRef = useRef(1);
+  const allLoadedRef = useRef(false);
+  const loadingRef = useRef(false);
+  // Snapshot der Filter-Parameter, mit denen die aktuelle Page-Sequenz läuft.
+  // Wenn sich die Filter ändern, wird er invalidiert → Reset auf Page 1.
+  const filterSignatureRef = useRef<string>('');
+
+  const computeFilterSignature = (): string => JSON.stringify(preferenceFilters());
+
+  const loadFeed = async (opts: { reset?: boolean } = {}) => {
+    if (loadingRef.current) return;
+    const reset = opts.reset !== false; // default: reset
+    if (reset) {
+      currentPageRef.current = 1;
+      allLoadedRef.current = false;
+      filterSignatureRef.current = computeFilterSignature();
+    }
+    loadingRef.current = true;
     try {
-      const apiProducts = await fetchProducts({ limit: 50, ...preferenceFilters() });
+      const params = preferenceFilters();
+      const page = currentPageRef.current;
+      console.log(`[Feed] loadFeed page=${page} reset=${reset} params=${JSON.stringify(params)}`);
+      const apiProducts = await fetchProducts({ limit: PAGE_SIZE, page, ...params });
+      console.log(`[Feed] page=${page} → ${apiProducts.length} Produkte`);
       const prefs = getPreferences();
-      const filtered = apiProducts.filter((p) => passesClientFilters(p, prefs));
-      setCards(filtered);
+      const ordered = applyFeedOrdering(apiProducts, prefs);
+      if (apiProducts.length < PAGE_SIZE) {
+        allLoadedRef.current = true;
+      }
+      if (reset) {
+        setCards(ordered);
+      } else {
+        // Beim Anhängen: Watchlist-/Filter-Doubletten zur aktuellen Liste vermeiden.
+        setCards((prev) => {
+          const known = new Set(prev.map((p) => p.id));
+          const fresh = ordered.filter((p) => !known.has(p.id));
+          return [...prev, ...fresh];
+        });
+      }
     } catch (e) {
       console.warn('[Feed] Backend nicht erreichbar:', e);
+    } finally {
+      loadingRef.current = false;
     }
+  };
+
+  const loadMorePage = async () => {
+    if (allLoadedRef.current || loadingRef.current) return;
+    // Wenn sich die Filter zwischen Pages ändern, lieber komplett neu laden.
+    if (filterSignatureRef.current !== computeFilterSignature()) {
+      await loadFeed({ reset: true });
+      return;
+    }
+    currentPageRef.current += 1;
+    await loadFeed({ reset: false });
   };
 
   useEffect(() => {
@@ -276,17 +373,38 @@ export default function FeedScreen() {
         if (!seen) setShowMechanicsIntro(true);
       }
 
-      await loadFeed();
+      await loadFeed({ reset: true });
       setIsLoading(false);
     }
     init();
   }, []);
 
-  // Auf Präferenz-Änderungen reagieren — neuen API-Call mit aktualisierten Filtern
+  // Auf Präferenz-Änderungen reagieren — Reset + neue Page 1 holen.
   useEffect(() => {
     const unsubscribe = subscribePreferences(() => {
       setShowOnboarding(!isOnboardingDone());
-      loadFeed();
+      loadFeed({ reset: true });
+    });
+    return () => { unsubscribe(); };
+  }, []);
+
+  // Briefing 2026-05-10 (Aufgabe 6): Add/Remove der Watchlist auch live in den Feed
+  // einarbeiten (ohne neuen API-Call — wir filtern lokal).
+  useEffect(() => {
+    const unsubscribe = subscribeWatchlist(() => {
+      setCards((prev) => {
+        const watchlistIds = new Set(getWatchlist().map((p) => p.id));
+        return prev.filter((p) => !watchlistIds.has(p.id));
+      });
+    });
+    return () => { unsubscribe(); };
+  }, []);
+
+  // Briefing v2 2026-05-10 (Aufgabe C): Subtyp-Beschreibung für die Karten-Anzeige.
+  const [filterDescription, setFilterDescription] = useState<string>(buildActiveFilterDescription);
+  useEffect(() => {
+    const unsubscribe = subscribePreferences(() => {
+      setFilterDescription(buildActiveFilterDescription());
     });
     return () => { unsubscribe(); };
   }, []);
@@ -311,7 +429,6 @@ export default function FeedScreen() {
   };
 
   const actionOpacity = useRef(new Animated.Value(0)).current;
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = useRef(false);
   const touchStartYRef = useRef(0);
   const touchStartXRef = useRef(0);
@@ -345,6 +462,9 @@ export default function FeedScreen() {
 
   const swipeCardRef = useRef<(direction: 'left' | 'right' | 'up' | 'down') => void>(() => {});
 
+  // Briefing 2026-05-10 (Aufgabe 5): Kein 400ms-LongPress mehr.
+  // Tipp im unteren 20% → Nav öffnet sofort. Tipp oben → Detail-Sheet.
+  // Wischen bleibt priorisiert (isDragging gewinnt vor Tap).
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -352,23 +472,16 @@ export default function FeedScreen() {
         isDragging.current = false;
         touchStartYRef.current = gesture.y0;
         touchStartXRef.current = gesture.x0;
-        if (gesture.y0 > SCREEN_HEIGHT * 0.8) {
-          longPressTimer.current = setTimeout(() => {
-            if (!isDragging.current) openNavRef.current();
-          }, 400);
-        }
       },
       onPanResponderMove: (_, gesture) => {
         if (Math.abs(gesture.dx) > 5 || Math.abs(gesture.dy) > 5) {
           isDragging.current = true;
-          if (longPressTimer.current) clearTimeout(longPressTimer.current);
         }
         const topId = cardsRef.current[0]?.id;
         if (!topId) return;
         getPosition(topId).setValue({ x: gesture.dx, y: gesture.dy });
       },
       onPanResponderRelease: (_, gesture) => {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
         if (isDragging.current) {
           if (gesture.dx > SWIPE_THRESHOLD) swipeCardRef.current('right');
           else if (gesture.dx < -SWIPE_THRESHOLD) swipeCardRef.current('left');
@@ -378,7 +491,9 @@ export default function FeedScreen() {
         } else {
           if (touchStartXRef.current < 80 && touchStartYRef.current < 100) {
             goBackRef.current();
-          } else if (touchStartYRef.current <= SCREEN_HEIGHT * 0.8) {
+          } else if (touchStartYRef.current > SCREEN_HEIGHT * 0.8) {
+            openNavRef.current();
+          } else {
             openDetailSheetRef.current();
           }
         }
@@ -415,7 +530,14 @@ export default function FeedScreen() {
       useNativeDriver: true,
       speed: 20,
     }).start(() => {
-      setCards((prev) => prev.slice(1));
+      setCards((prev) => {
+        const next = prev.slice(1);
+        // Briefing 2026-05-10 (Aufgabe 7): wenn Stapel dünn wird, nächste Page anstoßen.
+        if (next.length < LOAD_MORE_THRESHOLD && !allLoadedRef.current && !loadingRef.current) {
+          loadMorePage();
+        }
+        return next;
+      });
       positionsRef.current.delete(currentCard.id);
     });
   };
@@ -518,6 +640,9 @@ export default function FeedScreen() {
           {subcategoryLabel(product.subcategory) !== '' && (
             <Text style={styles.cardCategoryLabel}>{subcategoryLabel(product.subcategory)}</Text>
           )}
+          {filterDescription !== '' && (
+            <Text style={styles.cardSubcategoryLabel}>{filterDescription}</Text>
+          )}
         </View>
 
         {isTop && (
@@ -557,37 +682,48 @@ export default function FeedScreen() {
   }
 
   if (cards.length === 0) {
+    // Briefing 2026-05-10 (Aufgabe 5+8): Tipp unten Mitte öffnet Nav sofort,
+    // Nav-Bar liegt am unteren Rand (analog zum Haupt-Feed via navBackdrop).
     const navTranslateYEmpty = navAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
+    const handleEmptyPress = (e: { nativeEvent: { locationY: number } }) => {
+      if (e.nativeEvent.locationY > SCREEN_HEIGHT * 0.8) {
+        openNav();
+      }
+    };
     return (
-      <TouchableOpacity
-        activeOpacity={1}
-        style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}
-        onLongPress={() => openNav()}
-        delayLongPress={400}
-      >
-        <Text style={styles.feedLogo}>ONDEYA</Text>
-        <Text style={{ color: colors.linen, fontSize: 18 }}>Alle Stücke gesehen.</Text>
-        <Text style={{ color: colors.taupe, fontSize: 15 }}>Schau morgen wieder vorbei.</Text>
+      <View style={styles.container}>
         <TouchableOpacity
-          onPress={() => { setIsLoading(true); loadFeed().then(() => setIsLoading(false)); }}
-          style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, backgroundColor: colors.sand }}
+          activeOpacity={1}
+          style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}
+          onPress={handleEmptyPress}
         >
-          <Text style={{ color: colors.noir, fontSize: 15, fontWeight: '600' }}>Nochmal entdecken</Text>
+          <Text style={styles.feedLogo}>ONDEYA</Text>
+          <Text style={{ color: colors.linen, fontSize: 18 }}>Alle Stücke gesehen.</Text>
+          <Text style={{ color: colors.taupe, fontSize: 15 }}>Schau morgen wieder vorbei.</Text>
+          <TouchableOpacity
+            onPress={() => { setIsLoading(true); loadFeed({ reset: true }).then(() => setIsLoading(false)); }}
+            style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, backgroundColor: colors.sand }}
+          >
+            <Text style={{ color: colors.noir, fontSize: 15, fontWeight: '600' }}>Nochmal entdecken</Text>
+          </TouchableOpacity>
         </TouchableOpacity>
+
         {showNav && (
-          <Animated.View style={[styles.navBar, { opacity: navAnim, transform: [{ translateY: navTranslateYEmpty }] }]}>
-            <TouchableOpacity style={styles.navItem} onPress={() => closeNav()}>
-              <Text style={styles.navItemText}>Feed</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/(tabs)/explore'); }}>
-              <Text style={styles.navItemText}>Watchlist</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/(tabs)/profile'); }}>
-              <Text style={styles.navItemText}>Profil</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          <TouchableOpacity style={styles.navBackdrop} activeOpacity={1} onPress={closeNav}>
+            <Animated.View style={[styles.navBar, { opacity: navAnim, transform: [{ translateY: navTranslateYEmpty }] }]}>
+              <TouchableOpacity style={styles.navItem} onPress={() => closeNav()}>
+                <Text style={[styles.navItemText, styles.navItemActive]}>Feed</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/explore' as any); }}>
+                <Text style={styles.navItemText}>Watchlist</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navItem} onPress={() => { closeNav(); router.push('/profile' as any); }}>
+                <Text style={styles.navItemText}>Profil</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
+      </View>
     );
   }
 
@@ -726,6 +862,7 @@ const styles = StyleSheet.create({
   },
   cardDiscountText: { color: colors.linen, fontSize: 14, fontWeight: '700' },
   cardCategoryLabel: { color: 'rgba(232, 221, 208, 0.7)', fontSize: 14, lineHeight: 20 },
+  cardSubcategoryLabel: { color: 'rgba(232, 221, 208, 0.55)', fontSize: 13, lineHeight: 18 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 20 },
   likeOverlay: { backgroundColor: 'rgba(46, 74, 62, 0.78)' },
   skipOverlay: { backgroundColor: 'rgba(74, 46, 46, 0.78)' },

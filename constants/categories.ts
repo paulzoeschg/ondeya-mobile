@@ -126,3 +126,57 @@ export const KIDS_SUBGENDERS: KidsSubGenderDefinition[] = [
   { value: 'maedchen', label: 'Mädchen' },
   { value: 'jungen', label: 'Jungen' },
 ];
+
+// ── Label-Helper für Filter-Chips & Detail-Sheet (2026-05-10) ───────────────
+const APPAREL_LABEL_MAP: Record<string, string> = APPAREL_TYPES.reduce((acc, t) => {
+  acc[t.value] = t.label;
+  return acc;
+}, {} as Record<string, string>);
+
+const JEWELRY_LABEL_MAP: Record<string, string> = JEWELRY_TYPES.reduce((acc, t) => {
+  acc[t.value] = t.label;
+  return acc;
+}, {} as Record<string, string>);
+
+const GENDER_LABEL_MAP: Record<string, string> = GENDERS.reduce((acc, g) => {
+  acc[g.value] = g.label;
+  return acc;
+}, {} as Record<string, string>);
+
+const KIDS_SUB_LABEL_MAP: Record<string, string> = KIDS_SUBGENDERS.reduce((acc, k) => {
+  acc[k.value] = k.label;
+  return acc;
+}, {} as Record<string, string>);
+
+export function apparelTypeLabel(value: string | undefined): string {
+  if (!value) return '';
+  return APPAREL_LABEL_MAP[value] ?? '';
+}
+
+export function jewelryTypeLabel(value: string | undefined): string {
+  if (!value) return '';
+  return JEWELRY_LABEL_MAP[value] ?? '';
+}
+
+export function genderLabel(value: string | undefined): string {
+  if (!value) return '';
+  return GENDER_LABEL_MAP[value] ?? '';
+}
+
+export function kidsSubGenderLabel(value: string | undefined): string {
+  if (!value) return '';
+  return KIDS_SUB_LABEL_MAP[value] ?? '';
+}
+
+const PRICE_RANGE_LABELS: Record<string, string> = {
+  bis50: 'Bis 50 €',
+  '50bis150': '50–150 €',
+  '150bis300': '150–300 €',
+  ueber300: 'Über 300 €',
+  egal: 'Preis egal',
+};
+
+export function priceRangeLabel(value: string | null | undefined): string {
+  if (!value) return '';
+  return PRICE_RANGE_LABELS[value] ?? '';
+}

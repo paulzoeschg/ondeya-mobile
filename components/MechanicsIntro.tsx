@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const colors = {
   noir: '#1a1714',
@@ -19,55 +19,106 @@ const colors = {
   terracotta: '#4a2e2e',
 };
 
-const ACTIONS = [
-  { direction: '→', label: 'Zur Watchlist', color: colors.forest },
-  { direction: '←', label: 'Weiter', color: colors.terracotta },
-  { direction: '↑', label: 'Direkt kaufen', color: colors.sand },
-  { direction: '↓', label: 'Nicht mein Stil', color: colors.taupe },
+const SWIPE_ACTIONS = [
+  { symbol: '→', label: 'Zur Watchlist', color: colors.forest },
+  { symbol: '←', label: 'Weiter', color: colors.terracotta },
+  { symbol: '↑', label: 'Direkt kaufen', color: colors.sand },
+  { symbol: '↓', label: 'Nicht mein Stil', color: colors.taupe },
+] as const;
+
+const GESTURE_ACTIONS = [
+  { symbol: '◎', label: 'Antippen', sublabel: 'Produktdetails öffnen sich', color: colors.sand },
+  { symbol: '⊙', label: 'Lang drücken unten', sublabel: 'Menü erscheint', color: colors.linen },
 ] as const;
 
 export default function MechanicsIntro({ onDismiss }: { onDismiss: () => void }) {
-  const opacity = useRef(new Animated.Value(0)).current;
+  const [step, setStep] = useState(0);
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.timing(opacity, {
+    Animated.timing(overlayOpacity, {
       toValue: 1,
       duration: 280,
       useNativeDriver: true,
     }).start();
-  }, [opacity]);
+  }, [overlayOpacity]);
+
+  const goToStep2 = () => {
+    Animated.timing(cardOpacity, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
+      setStep(1);
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
 
   const dismiss = () => {
-    Animated.timing(opacity, {
+    Animated.timing(overlayOpacity, {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
     }).start(onDismiss);
   };
 
+  const handleBackdropPress = () => {
+    if (step === 0) goToStep2();
+    else dismiss();
+  };
+
   return (
-    <Animated.View style={[styles.overlay, { opacity }]}>
-      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={dismiss} />
+    <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
+      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={handleBackdropPress} />
 
-      <View style={styles.card}>
+      <Animated.View style={[styles.card, { opacity: cardOpacity }]}>
         <Text style={styles.logo}>ONDEYA</Text>
-        <Text style={styles.subtitle}>So funktioniert's</Text>
 
-        <View style={styles.actions}>
-          {ACTIONS.map((a) => (
-            <View key={a.direction} style={styles.actionRow}>
-              <Text style={[styles.arrow, { color: a.color }]}>{a.direction}</Text>
-              <Text style={styles.actionLabel}>{a.label}</Text>
+        {step === 0 ? (
+          <>
+            <Text style={styles.subtitle}>So funktioniert's</Text>
+            <View style={styles.actions}>
+              {SWIPE_ACTIONS.map((a) => (
+                <View key={a.symbol} style={styles.actionRow}>
+                  <Text style={[styles.symbol, { color: a.color }]}>{a.symbol}</Text>
+                  <Text style={styles.actionLabel}>{a.label}</Text>
+                </View>
+              ))}
             </View>
-          ))}
+            <TouchableOpacity style={styles.button} onPress={goToStep2} activeOpacity={0.85}>
+              <Text style={styles.buttonText}>Weiter</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={styles.subtitle}>Und noch mehr</Text>
+            <View style={styles.actions}>
+              {GESTURE_ACTIONS.map((a) => (
+                <View key={a.symbol} style={styles.actionRow}>
+                  <Text style={[styles.symbol, { color: a.color }]}>{a.symbol}</Text>
+                  <View style={styles.actionTextGroup}>
+                    <Text style={styles.actionLabel}>{a.label}</Text>
+                    <Text style={styles.actionSublabel}>{a.sublabel}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.button} onPress={dismiss} activeOpacity={0.85}>
+              <Text style={styles.buttonText}>Los geht's</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        <View style={styles.dots}>
+          <View style={[styles.dot, step === 0 && styles.dotActive]} />
+          <View style={[styles.dot, step === 1 && styles.dotActive]} />
         </View>
-
-        <Text style={styles.hint}>Tippen für mehr Details</Text>
-
-        <TouchableOpacity style={styles.button} onPress={dismiss} activeOpacity={0.85}>
-          <Text style={styles.buttonText}>Los geht's</Text>
-        </TouchableOpacity>
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -103,25 +154,39 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     marginBottom: 16,
   },
-  actions: { gap: 14, marginBottom: 20 },
+  actions: { gap: 16, marginBottom: 24 },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  arrow: { fontSize: 26, width: 32, textAlign: 'center' },
+  symbol: { fontSize: 24, width: 32, textAlign: 'center' },
+  actionTextGroup: { gap: 2 },
   actionLabel: { color: colors.linen, fontSize: 16, fontWeight: '500' },
-  hint: {
-    color: colors.taupe,
-    fontSize: 12,
-    marginBottom: 20,
-  },
+  actionSublabel: { color: colors.taupe, fontSize: 13 },
   button: {
     backgroundColor: colors.sand,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
+    marginBottom: 16,
   },
   buttonText: {
     color: colors.noir,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.taupe,
+    opacity: 0.35,
+  },
+  dotActive: {
+    backgroundColor: colors.sand,
+    opacity: 1,
   },
 });

@@ -25,8 +25,13 @@ export type Product = {
 };
 
 const STORAGE_KEY = '@ondeya_watchlist';
+const DISMISSED_KEY = '@ondeya_watchlist_dismissed';
 
 let items: Product[] = [];
+// Briefing 2026-05-10 (Aufgabe 6): IDs, die der Nutzer aktiv aus der Watchlist
+// entfernt hat, dürfen wieder im Feed erscheinen — aber mit niedriger Priorität.
+// Watchlist-IDs (in `items`) werden hart aus dem Feed ausgeschlossen.
+let dismissedIds: Map<string, number> = new Map();
 const listeners = new Set<() => void>();
 
 const notify = () => listeners.forEach((l) => l());
@@ -36,6 +41,11 @@ export async function loadWatchlist(): Promise<void> {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     if (stored) {
       items = JSON.parse(stored).filter((p: unknown) => p != null && typeof p === 'object');
+    }
+    const storedDismissed = await AsyncStorage.getItem(DISMISSED_KEY);
+    if (storedDismissed) {
+      const parsed = JSON.parse(storedDismissed) as Record<string, number>;
+      dismissedIds = new Map(Object.entries(parsed));
     }
   } catch (e) {
     console.log('Watchlist load error:', e);
@@ -50,23 +60,45 @@ async function save() {
   }
 }
 
+async function saveDismissed() {
+  try {
+    const obj = Object.fromEntries(dismissedIds.entries());
+    await AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify(obj));
+  } catch (e) {
+    console.log('Watchlist dismissed save error:', e);
+  }
+}
+
 export function addToWatchlist(product: Product | null | undefined) {
   if (!product?.id) return;
   if (!items.find((p) => p?.id === product.id)) {
     items.push(product);
+    // Wenn das Produkt vorher manuell entfernt wurde, dismissed-Eintrag löschen.
+    if (dismissedIds.delete(product.id)) {
+      saveDismissed();
+    }
     notify();
     save();
   }
 }
 
 export function removeFromWatchlist(id: string) {
+  const wasInList = items.some((p) => p.id === id);
   items = items.filter((p) => p.id !== id);
+  if (wasInList) {
+    dismissedIds.set(id, Date.now());
+    saveDismissed();
+  }
   notify();
   save();
 }
 
 export function getWatchlist(): Product[] {
   return [...items];
+}
+
+export function getDismissedIds(): Map<string, number> {
+  return new Map(dismissedIds);
 }
 
 export function subscribeWatchlist(listener: () => void) {
@@ -76,9 +108,11 @@ export function subscribeWatchlist(listener: () => void) {
 
 export async function resetWatchlist(): Promise<void> {
   items = [];
+  dismissedIds = new Map();
   notify();
   try {
     await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem(DISMISSED_KEY);
   } catch (e) {
     console.log('Watchlist reset error:', e);
   }
