@@ -97,6 +97,29 @@ export const APPAREL_TYPES: ApparelTypeDefinition[] = [
   { value: 'sonstiges', label: 'Sonstiges' },
 ];
 
+// ── Schuh-Subtypen (shoeType) ───────────────────────────────────────────────
+// Briefing 2026-05-12 (Backend Schuh-Taxonomie): Schuhe kriegen analog zu
+// Bekleidung einen Subtyp-Filter im Quiz V3 und im Profil.
+export type ShoeTypeValue =
+  | 'sneaker' | 'business' | 'sport'
+  | 'stiefel' | 'sandalen' | 'pumps'
+  | 'sonstiges';
+
+export interface ShoeTypeDefinition {
+  value: ShoeTypeValue;
+  label: string;
+}
+
+export const SHOE_TYPES: ShoeTypeDefinition[] = [
+  { value: 'sneaker', label: 'Sneaker' },
+  { value: 'business', label: 'Business' },
+  { value: 'sport', label: 'Sport' },
+  { value: 'stiefel', label: 'Stiefel' },
+  { value: 'sandalen', label: 'Sandalen' },
+  { value: 'pumps', label: 'Pumps' },
+  { value: 'sonstiges', label: 'Sonstige' },
+];
+
 // ── Gender ──────────────────────────────────────────────────────────────────
 // Briefing 2026-05-09 (Taxonomie-Erweiterung): Kids als 4. Gender, mit
 // Sub-Toggle Mädchen/Jungen.
@@ -138,6 +161,11 @@ const JEWELRY_LABEL_MAP: Record<string, string> = JEWELRY_TYPES.reduce((acc, t) 
   return acc;
 }, {} as Record<string, string>);
 
+const SHOE_LABEL_MAP: Record<string, string> = SHOE_TYPES.reduce((acc, t) => {
+  acc[t.value] = t.label;
+  return acc;
+}, {} as Record<string, string>);
+
 const GENDER_LABEL_MAP: Record<string, string> = GENDERS.reduce((acc, g) => {
   acc[g.value] = g.label;
   return acc;
@@ -156,6 +184,11 @@ export function apparelTypeLabel(value: string | undefined): string {
 export function jewelryTypeLabel(value: string | undefined): string {
   if (!value) return '';
   return JEWELRY_LABEL_MAP[value] ?? '';
+}
+
+export function shoeTypeLabel(value: string | undefined): string {
+  if (!value) return '';
+  return SHOE_LABEL_MAP[value] ?? '';
 }
 
 export function genderLabel(value: string | undefined): string {
