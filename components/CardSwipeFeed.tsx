@@ -84,13 +84,30 @@ function applyOrdering(apiProducts: Product[], disabledBrands: string[]): Produc
   return [...high, ...low];
 }
 
-// 2026-05-14 (Bug C, Diagnose): Bild der nächsten Karte vorab laden, damit der
-// Wechsel nach dem Right-Swipe nicht durch einen Image-Mount flackert.
+// 2026-05-14 (Bug C/C-2): Image.prefetch hält die nächsten Karten warm. Bei
+// Dummy-Produkten (brand === 'Dummy') überspringen — placehold.co lädt im
+// Simulator unzuverlässig und das Bild wird durch ein Farb-Tile ersetzt.
 function prefetchNextImage(next?: Product) {
   if (!next?.image) return;
+  if (next.brand === 'Dummy') return;
   Image.prefetch(next.image).catch(() => {
     /* offline / cache-miss — egal, Karte rendert beim Mount halt regulär. */
   });
+}
+
+// Hintergrundfarbe für Dummy-Karten anhand der Trend-ID — macht die drei
+// Trend-Gruppen im Trends-Tab visuell unterscheidbar.
+function dummyBackgroundColor(productId: string): string {
+  if (productId.startsWith('dummy-t1-')) return '#c9a882'; // Sand
+  if (productId.startsWith('dummy-t2-')) return '#2e4a3e'; // Forest
+  if (productId.startsWith('dummy-t3-')) return '#3d3630'; // Espresso
+  return '#1a1714'; // Noir-Fallback
+}
+
+function dummyForegroundColor(productId: string): string {
+  // Sand-Karte: dunkler Text. Forest/Espresso: helle Linen-Schrift.
+  if (productId.startsWith('dummy-t1-')) return '#1a1714';
+  return '#e8ddd0';
 }
 
 function DetailSheet({
@@ -284,6 +301,13 @@ export default function CardSwipeFeed({
     loadFn({ reset: true }).then(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
+
+  // Bug C-2 (2026-05-14): Sobald der Stapel verändert wird, die ersten 3
+  // Bilder vorab in den Image-Cache laden. Damit ist die nächste Karte beim
+  // Mount garantiert schon da und blitzt nicht weiß auf.
+  useEffect(() => {
+    cards.slice(0, 3).forEach((card) => prefetchNextImage(card));
+  }, [cards]);
 
   // Auf Watchlist-Updates lokal reagieren, damit zur Watchlist hinzugefügte
   // Produkte aus dem Stack verschwinden.
@@ -480,6 +504,7 @@ export default function CardSwipeFeed({
     });
 
     const hasDiscount = product.discount > 0;
+    const isDummy = product.brand === 'Dummy';
 
     return (
       <Animated.View
@@ -489,18 +514,36 @@ export default function CardSwipeFeed({
           {
             transform: [{ translateX: pos.x }, { translateY: pos.y }, { rotate }],
             zIndex: isTop ? 10 : 1,
+            // Bug I-2 (2026-05-14): Dummy-Karten kriegen eine knallige Trend-
+            // Farbe statt Noir — macht die drei Trends visuell unterscheidbar.
+            backgroundColor: isDummy ? dummyBackgroundColor(product.id) : colors.noir,
           },
         ]}
         {...(isTop ? panResponder.panHandlers : {})}
       >
-        <ImageBackground
-          source={{ uri: product.image }}
-          style={StyleSheet.absoluteFillObject}
-          blurRadius={25}
-        >
-          <View style={styles.blurOverlay} />
-        </ImageBackground>
-        <Image source={{ uri: product.image }} style={styles.cardImage} resizeMode="contain" />
+        {isDummy ? (
+          // Dummy-Variante (Bug I-2): Kein Image — Name groß zentriert, damit
+          // die Karte auch ohne placehold.co-Roundtrip lesbar ist.
+          <View style={styles.dummyContent}>
+            <Text style={[styles.dummyName, { color: dummyForegroundColor(product.id) }]}>
+              {product.name}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Bug C-2 (2026-05-14): Noir-Backing-View garantiert, dass beim
+                Mount-Moment kein weißer Image-Default durchblitzt. */}
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.noir }]} />
+            <ImageBackground
+              source={{ uri: product.image }}
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.noir }]}
+              blurRadius={25}
+            >
+              <View style={styles.blurOverlay} />
+            </ImageBackground>
+            <Image source={{ uri: product.image }} style={styles.cardImage} resizeMode="contain" />
+          </>
+        )}
         <LinearGradient
           colors={['transparent', 'rgba(26,23,20,0.85)']}
           locations={[0, 1]}
@@ -668,6 +711,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   blurOverlay: { flex: 1, backgroundColor: 'rgba(26, 23, 20, 0.5)' },
+  dummyContent: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  dummyName: {
+    fontSize: 96,
+    fontWeight: '800',
+    letterSpacing: -2,
+    textAlign: 'center',
+  },
   cardImage: {
     position: 'absolute',
     top: 0,

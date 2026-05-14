@@ -18,6 +18,7 @@ import {
   Switch,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -89,11 +90,38 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function GroupHeader({ title, subtitle }: { title: string; subtitle: string }) {
+// Bug J (2026-05-14): Akkordeon-Pills steuern, welche Setting-Gruppe expanded
+// ist. Reine UI-Logik, kein quizPath-Bezug, kein Tab-Wechsel.
+type ExpandedGroup = 'feed' | 'trend';
+const EXPANDED_GROUP_KEY = '@ondeya_profile_expanded_group';
+
+function GroupTogglePills({
+  current,
+  onChange,
+}: {
+  current: ExpandedGroup;
+  onChange: (next: ExpandedGroup) => void;
+}) {
   return (
-    <View style={styles.groupHeader}>
-      <Text style={styles.groupHeaderTitle}>{title}</Text>
-      <Text style={styles.groupHeaderSub}>{subtitle}</Text>
+    <View style={styles.groupPillRow}>
+      <TouchableOpacity
+        style={[styles.groupPill, current === 'feed' && styles.groupPillActive]}
+        onPress={() => onChange('feed')}
+        activeOpacity={0.85}
+      >
+        <Text style={[styles.groupPillLabel, current === 'feed' && styles.groupPillLabelActive]}>
+          Feed-Einstellungen
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.groupPill, current === 'trend' && styles.groupPillActive]}
+        onPress={() => onChange('trend')}
+        activeOpacity={0.85}
+      >
+        <Text style={[styles.groupPillLabel, current === 'trend' && styles.groupPillLabelActive]}>
+          Trend-Einstellungen
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -133,6 +161,21 @@ export default function ProfileScreen() {
       loadProfile().then(() => setProfileState(getProfile()));
     }, [])
   );
+
+  // Bug J: Akkordeon-State für die Profil-Setting-Gruppen. Default „feed",
+  // letzte Wahl per AsyncStorage persistiert.
+  const [expandedGroup, setExpandedGroup] = useState<ExpandedGroup>('feed');
+  useEffect(() => {
+    AsyncStorage.getItem(EXPANDED_GROUP_KEY)
+      .then((raw) => {
+        if (raw === 'feed' || raw === 'trend') setExpandedGroup(raw);
+      })
+      .catch(() => { /* leere fallback */ });
+  }, []);
+  const changeExpandedGroup = (next: ExpandedGroup) => {
+    setExpandedGroup(next);
+    AsyncStorage.setItem(EXPANDED_GROUP_KEY, next).catch(() => { /* ignore */ });
+  };
 
   const updateProfile = (updates: Partial<{ name: string; avatarUri: string | null }>) => {
     setProfileStore(updates);
@@ -331,11 +374,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Bug J: Akkordeon-Pills steuern, welche Setting-Gruppe expanded ist. */}
+        <GroupTogglePills current={expandedGroup} onChange={changeExpandedGroup} />
+
         {/* ───────── Feed-Einstellungen ───────── */}
-        <GroupHeader
-          title="Feed-Einstellungen"
-          subtitle="Wirken im Feed-Tab (Manuell-Modus)"
-        />
+        {expandedGroup === 'feed' && <>
 
         <Section title="Wer trägt's?">
           <View style={styles.chips}>
@@ -491,11 +534,10 @@ export default function ProfileScreen() {
           })}
         </View>
 
+        </>}
+
         {/* ───────── Trend-Einstellungen ───────── */}
-        <GroupHeader
-          title="Trend-Einstellungen"
-          subtitle="Wirken im Trends-Tab"
-        />
+        {expandedGroup === 'trend' && <>
 
         <Section title="Wer trägt's?">
           <View style={styles.chips}>
@@ -565,6 +607,8 @@ export default function ProfileScreen() {
             ))}
           </View>
         </Section>
+
+        </>}
 
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>Wie Ondeya lernt</Text>
@@ -643,24 +687,36 @@ const styles = StyleSheet.create({
   },
   accountHint: { color: colors.taupe, fontSize: 11 },
 
-  groupHeader: {
-    marginTop: 24,
-    paddingTop: 16,
-    paddingBottom: 4,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(201, 168, 130, 0.18)',
-    gap: 4,
+  // Bug J: Akkordeon-Pills oben über den Setting-Gruppen.
+  groupPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
   },
-  groupHeaderTitle: {
-    color: colors.sand,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+  groupPill: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.taupe,
+    alignItems: 'center',
+    backgroundColor: 'rgba(26,23,20,0.35)',
   },
-  groupHeaderSub: {
+  groupPillActive: {
+    backgroundColor: colors.sand,
+    borderColor: colors.sand,
+  },
+  groupPillLabel: {
     color: colors.taupe,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  groupPillLabelActive: {
+    color: colors.noir,
+    fontWeight: '700',
   },
 
   section: {

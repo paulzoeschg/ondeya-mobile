@@ -38,20 +38,17 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Bug H (2026-05-14): Nur Icons, keine Text-Labels.
+        tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: colors.espresso,
           borderTopColor: 'rgba(138, 127, 114, 0.2)',
-          height: 80,
-          paddingBottom: 20,
+          height: 64,
+          paddingBottom: 14,
           paddingTop: 10,
         },
         tabBarActiveTintColor: colors.sand,
         tabBarInactiveTintColor: colors.taupe,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          letterSpacing: 0.5,
-        },
       }}
     >
       <Tabs.Screen
@@ -60,8 +57,8 @@ export default function TabLayout() {
           title: 'Feed',
           // Feed nutzt das eigene Tap-Overlay; Standard-Tab-Bar bleibt unsichtbar.
           tabBarStyle: { display: 'none' },
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="layers-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="layers-outline" size={26} color={color} />
           ),
         }}
       />
@@ -70,8 +67,8 @@ export default function TabLayout() {
         options={{
           title: 'Trends',
           tabBarStyle: { display: 'none' },
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="trending-up-outline" size={26} color={color} />
           ),
         }}
       />
@@ -79,8 +76,8 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: 'Watchlist',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bookmark-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="bookmark-outline" size={26} color={color} />
           ),
         }}
       />
