@@ -302,11 +302,11 @@ export default function CardSwipeFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
-  // Bug C-2 (2026-05-14): Sobald der Stapel verändert wird, die ersten 3
-  // Bilder vorab in den Image-Cache laden. Damit ist die nächste Karte beim
-  // Mount garantiert schon da und blitzt nicht weiß auf.
+  // Bug C-2 / C-3 (2026-05-14): Erste 5 Bilder vorab in den Cache. Wir
+  // mounten die nächsten 3 Karten als Stack (Bug C-3), die 2 dahinter
+  // halten wir trotzdem warm, damit der Übergang flüssig bleibt.
   useEffect(() => {
-    cards.slice(0, 3).forEach((card) => prefetchNextImage(card));
+    cards.slice(0, 5).forEach((card) => prefetchNextImage(card));
   }, [cards]);
 
   // Auf Watchlist-Updates lokal reagieren, damit zur Watchlist hinzugefügte
@@ -429,10 +429,13 @@ export default function CardSwipeFeed({
       direction === 'up' ? -SCREEN_HEIGHT * 1.5 :
       direction === 'down' ? SCREEN_HEIGHT * 1.5 : 0;
 
-    // 2026-05-14 (Bug C): Nächste Karte vorab im Image-Cache halten, damit
-    // beim Mount nach dem Swipe kein Flicker entsteht.
-    prefetchNextImage(cardsRef.current[1]);
+    // 2026-05-14 (Bug C/C-3): Übernächste Karten im Image-Cache halten.
+    // Mit dem 3-Karten-Stack ist die nächste Karte ohnehin gemountet, aber
+    // die noch nicht sichtbare Karte 3 wird beim Swipe in den Stack
+    // gerutscht — deren URL muss bereits warm sein.
     prefetchNextImage(cardsRef.current[2]);
+    prefetchNextImage(cardsRef.current[3]);
+    prefetchNextImage(cardsRef.current[4]);
 
     const pos = getPosition(currentCard.id);
     Animated.spring(pos, {
@@ -480,7 +483,7 @@ export default function CardSwipeFeed({
 
   const insets = useSafeAreaInsets();
 
-  const renderCard = (product: Product, isTop: boolean) => {
+  const renderCard = (product: Product, isTop: boolean, stackPosition: number) => {
     const pos = getPosition(product.id);
     const rotate = pos.x.interpolate({
       inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
@@ -512,8 +515,13 @@ export default function CardSwipeFeed({
         style={[
           styles.card,
           {
-            transform: [{ translateX: pos.x }, { translateY: pos.y }, { rotate }],
-            zIndex: isTop ? 10 : 1,
+            // Nicht-top-Karten bleiben in der Mitte stehen, damit sie hinter
+            // der aktiven Karte vorgeladen sind. Nur die top card animiert.
+            transform: isTop
+              ? [{ translateX: pos.x }, { translateY: pos.y }, { rotate }]
+              : [],
+            // Bug C-3: stack-Reihenfolge explizit über zIndex, isTop gewinnt.
+            zIndex: isTop ? 10 : stackPosition + 1,
             // Bug I-2 (2026-05-14): Dummy-Karten kriegen eine knallige Trend-
             // Farbe statt Noir — macht die drei Trends visuell unterscheidbar.
             backgroundColor: isDummy ? dummyBackgroundColor(product.id) : colors.noir,
@@ -629,7 +637,10 @@ export default function CardSwipeFeed({
     );
   }
 
-  const visibleCards = cards.slice(0, 2).reverse();
+  // Bug C-3 (2026-05-14): 3 Karten im Stack. Damit ist die nächste Karte
+  // bereits beim Swipe-Start mit gemountetem <Image> verfügbar — kein Mount-
+  // Cycle für den User mehr sichtbar.
+  const visibleCards = cards.slice(0, 3).reverse();
 
   return (
     <View style={styles.container}>
@@ -638,7 +649,9 @@ export default function CardSwipeFeed({
       <View style={styles.cardContainer}>
         {visibleCards.map((product, index) => {
           const isTop = index === visibleCards.length - 1;
-          return renderCard(product, isTop);
+          // stackPosition: 0 = hinten, growing nach vorne. visibleCards ist
+          // bereits reversed, also entspricht index der Stapel-Position.
+          return renderCard(product, isTop, index);
         })}
       </View>
 

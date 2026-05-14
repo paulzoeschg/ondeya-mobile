@@ -3,7 +3,7 @@
 // ausgeklappt — Tap unten Mitte öffnet, Tap außerhalb schließt.
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, Image, View } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity, Image, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getProfile, subscribeProfile, type ProfileData } from '../store/profile-store';
@@ -45,7 +45,7 @@ function ProfileTabIcon({ active }: { active: boolean }) {
   }
   return (
     <View style={[styles.avatarWrap, styles.avatarFallback, active && styles.avatarWrapActive]}>
-      <Ionicons name="person" size={16} color={active ? colors.sand : colors.taupe} />
+      <Ionicons name="person" size={20} color={active ? colors.sand : colors.taupe} />
     </View>
   );
 }
@@ -76,27 +76,26 @@ export function BottomNavBar({
   return (
     <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
       <Animated.View style={[styles.bar, { opacity: anim, transform: [{ translateY }] }]}>
+        {/* Bug H-2 (2026-05-14): Nur Icons im Tap-Overlay, keine Wörter mehr —
+            konsistent mit der Standard-Bar (tabBarShowLabel: false) auf
+            Watchlist + Profil. */}
         <NavItem
-          icon={<Ionicons name="layers-outline" size={20} color={current === 'feed' ? colors.sand : colors.taupe} />}
-          label="Feed"
+          icon={<Ionicons name="layers-outline" size={26} color={current === 'feed' ? colors.sand : colors.taupe} />}
           active={current === 'feed'}
           onPress={() => goTo('feed')}
         />
         <NavItem
-          icon={<Ionicons name="trending-up-outline" size={20} color={current === 'trends' ? colors.sand : colors.taupe} />}
-          label="Trends"
+          icon={<Ionicons name="trending-up-outline" size={26} color={current === 'trends' ? colors.sand : colors.taupe} />}
           active={current === 'trends'}
           onPress={() => goTo('trends')}
         />
         <NavItem
-          icon={<Ionicons name="bookmark-outline" size={20} color={current === 'watchlist' ? colors.sand : colors.taupe} />}
-          label="Watchlist"
+          icon={<Ionicons name="bookmark-outline" size={26} color={current === 'watchlist' ? colors.sand : colors.taupe} />}
           active={current === 'watchlist'}
           onPress={() => goTo('watchlist')}
         />
         <NavItem
           icon={<ProfileTabIcon active={current === 'profile'} />}
-          label="Profil"
           active={current === 'profile'}
           onPress={() => goTo('profile')}
         />
@@ -107,19 +106,15 @@ export function BottomNavBar({
 
 function NavItem({
   icon,
-  label,
-  active,
   onPress,
 }: {
   icon: React.ReactNode;
-  label: string;
   active: boolean;
   onPress: () => void;
 }) {
   return (
     <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.85}>
       {icon}
-      <Text style={[styles.itemLabel, active && styles.itemLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -162,24 +157,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   item: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 18,
     alignItems: 'center',
-    gap: 2,
-    minWidth: 64,
+    justifyContent: 'center',
+    minWidth: 56,
   },
-  itemLabel: {
-    color: colors.taupe,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  itemLabelActive: { color: colors.sand },
   avatarWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   avatarWrapActive: {
