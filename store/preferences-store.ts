@@ -31,6 +31,13 @@ export type Preferences = {
   followedTrendIds: string[];          // Liste der gefolgten Trend-IDs (aus Q3-A)
   selectedShoeTypes: ShoeTypeValue[];  // Schuh-Subtyp-Filter (aus Q4-B Block B + Profil)
 
+  // V3.1 Felder (Bug B/F, 2026-05-14 — Profil mit getrennten Feed-/Trend-
+  // Settings). Eigene Trend-Gender und Trend-Preisrahmen, parallel zu den
+  // Feed-Settings. Backend D1 ignoriert diese aktuell — die Felder dienen
+  // primär der UI/Trend-Sektion und dem Trends-Tab-Empty-State-Filter.
+  trendGenders: GenderValue[];         // Nur 'damen' / 'herren' im UI
+  trendPriceRange: PriceRangeType | null;
+
   // V2 Felder (Onboarding-Antworten)
   genders: GenderType[];
   stylesV2: StyleV2Type[];
@@ -85,6 +92,8 @@ const defaultPreferences: Preferences = {
   quizPath: null,
   followedTrendIds: [],
   selectedShoeTypes: [],
+  trendGenders: [],
+  trendPriceRange: null,
   genders: [],
   stylesV2: [],
   categoriesV2: [],
@@ -155,6 +164,19 @@ function migrate(stored: Partial<Preferences> & Record<string, unknown>): Partia
     migrated.quizPath = 'manuell';
     migrated.followedTrendIds = [];
     migrated.selectedShoeTypes = []; // leer = kein Schuh-Filter, alle anzeigen
+  }
+
+  // V3 → V3.1 (2026-05-14): trendGenders + trendPriceRange existieren bei
+  // Bestandsusern noch nicht. Defaults sind harmlos (leer/null).
+  if (!Array.isArray(migrated.trendGenders)) {
+    migrated.trendGenders = [];
+  } else {
+    migrated.trendGenders = (migrated.trendGenders as string[]).filter(
+      (v): v is GenderValue => v === 'damen' || v === 'herren'
+    );
+  }
+  if (migrated.trendPriceRange === undefined) {
+    migrated.trendPriceRange = null;
   }
 
   // selectedShoeTypes-Wert säubern (falls aus Vorschau-Build mit anderer Form)

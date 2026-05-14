@@ -28,6 +28,10 @@ export interface FetchProductsParams {
   apparelType?: string;    // 'jeans' | 'hosen' | ... (komma-getrennt)
   shoeType?: string;       // 'sneaker' | 'business' | 'sport' | 'stiefel' | 'sandalen' | 'pumps' | 'sonstiges' (komma-getrennt)
   kidsSubGender?: string;  // 'maedchen' | 'jungen' (komma-getrennt; nur wirksam wenn gender 'kids' enthält)
+  // Bug D1 (2026-05-14): trendIds-Override. Wenn gesetzt, ignoriert das Backend
+  // alle anderen Pool-Filter und liefert die Produkte der gewählten Trends in
+  // Trend-Reihenfolge.
+  trendIds?: string;
   page?: number;
   limit?: number;
 }
@@ -72,6 +76,7 @@ export async function fetchProducts(params: FetchProductsParams = {}): Promise<P
   if (params.apparelType) url.searchParams.set('apparelType', params.apparelType);
   if (params.shoeType) url.searchParams.set('shoeType', params.shoeType);
   if (params.kidsSubGender) url.searchParams.set('kidsSubGender', params.kidsSubGender);
+  if (params.trendIds) url.searchParams.set('trendIds', params.trendIds);
   if (params.page) url.searchParams.set('page', String(params.page));
   if (params.limit) url.searchParams.set('limit', String(params.limit));
 

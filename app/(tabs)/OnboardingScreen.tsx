@@ -335,20 +335,18 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.progressBar}>
-          {steps.slice(1).map((s, i) => {
-            const idxInVisible = i;
-            const currentVisibleIndex = currentIndex - 1;
-            return (
-              <View
-                key={s}
-                style={[
-                  styles.progressDot,
-                  idxInVisible < currentVisibleIndex && styles.progressDotDone,
-                  idxInVisible === currentVisibleIndex && styles.progressDotCurrent,
-                ]}
-              />
-            );
-          })}
+          {/* Bug E (2026-05-14): Q1 (Pfad-Wahl) zählt mit als erster Dot.
+              Trends-Pfad hat damit 4 Dots, nicht 3. */}
+          {steps.map((s, i) => (
+            <View
+              key={s}
+              style={[
+                styles.progressDot,
+                i < currentIndex && styles.progressDotDone,
+                i === currentIndex && styles.progressDotCurrent,
+              ]}
+            />
+          ))}
         </View>
       </View>
 
