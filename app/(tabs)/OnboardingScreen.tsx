@@ -307,7 +307,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
             <View style={styles.q1Accent} />
             <View style={styles.q1TileContent}>
               <Text style={styles.q1TileTitle}>Suche nach{'\n'}aktuellen Trends</Text>
-              <Text style={styles.q1TileSub}>Diese Woche kuratiert — los geht&apos;s</Text>
+              <Text style={styles.q1TileSub}>Diese Woche frisch — los geht&apos;s</Text>
             </View>
           </TouchableOpacity>
 
@@ -510,7 +510,7 @@ function QuestionTrendsA({
       <>
         <Text style={styles.questionTitle}>Welche Trends{'\n'}interessieren dich?</Text>
         <View style={styles.emptyTrendCard}>
-          <Text style={styles.emptyTrendTitle}>Diese Woche kuratieren wir gerade.</Text>
+          <Text style={styles.emptyTrendTitle}>Diese Woche stellen wir gerade zusammen.</Text>
           <Text style={styles.emptyTrendText}>
             Wähle solange „Lass mich manuell filtern“ — der erste Trend kommt bald.
           </Text>

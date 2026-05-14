@@ -36,7 +36,7 @@ export interface FetchProductsParams {
   limit?: number;
 }
 
-// Trend-Backend (2026-05-12) — die wöchentlich kuratierten Trends, an die das
+// Trend-Backend (2026-05-12) — die wöchentlich ausgewählten Trends, an die das
 // Quiz V3 in Pfad A „Suche nach aktuellen Trends" andockt.
 export interface Trend {
   id: string;
