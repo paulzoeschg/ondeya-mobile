@@ -444,7 +444,13 @@ export default function CardSwipeFeed({
       speed: 20,
     }).start(() => {
       setCards((prev) => {
-        const next = prev.slice(1);
+        // Bug C-4 (2026-05-14): NICHT prev.slice(1) — bei einem Right-Swipe
+        // hat subscribeWatchlist die geswipte Karte schon synchron mit
+        // addToWatchlist() aus dem Array entfernt. Ein zweites Entfernen
+        // würde die im Stack vorgezeigte „nächste" Karte überspringen.
+        // Stattdessen gezielt by id rauswerfen — idempotent für alle vier
+        // Swipe-Richtungen.
+        const next = prev.filter((p) => p.id !== currentCard.id);
         if (next.length < LOAD_MORE_THRESHOLD && !allLoadedRef.current && !loadingRef.current) {
           loadMore();
         }
