@@ -26,9 +26,35 @@ export interface FetchProductsParams {
   audience?: string;       // 'erwachsen' | 'kids'
   jewelryType?: string;    // 'ringe' | 'ketten' | 'armbaender' | 'ohrringe' | 'anhaenger' | 'sonstiges' (komma-getrennt)
   apparelType?: string;    // 'jeans' | 'hosen' | ... (komma-getrennt)
+  shoeType?: string;       // 'sneaker' | 'business' | 'sport' | 'stiefel' | 'sandalen' | 'pumps' | 'sonstiges' (komma-getrennt)
   kidsSubGender?: string;  // 'maedchen' | 'jungen' (komma-getrennt; nur wirksam wenn gender 'kids' enthält)
   page?: number;
   limit?: number;
+}
+
+// Trend-Backend (2026-05-12) — die wöchentlich kuratierten Trends, an die das
+// Quiz V3 in Pfad A „Suche nach aktuellen Trends" andockt.
+export interface Trend {
+  id: string;
+  slug: string;
+  title: string;
+  heroImage: string;
+  description: string;
+  gender: 'damen' | 'herren' | 'unisex';
+  active: boolean;
+  sortOrder: number;
+  productIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchActiveTrends(): Promise<Trend[]> {
+  const response = await fetch(`${BASE_URL}/api/trends/active`);
+  if (!response.ok) {
+    throw new Error(`API Fehler: ${response.status}`);
+  }
+  const data = await response.json();
+  return data as Trend[];
 }
 
 export async function fetchProducts(params: FetchProductsParams = {}): Promise<Product[]> {
@@ -44,6 +70,7 @@ export async function fetchProducts(params: FetchProductsParams = {}): Promise<P
   if (params.audience) url.searchParams.set('audience', params.audience);
   if (params.jewelryType) url.searchParams.set('jewelryType', params.jewelryType);
   if (params.apparelType) url.searchParams.set('apparelType', params.apparelType);
+  if (params.shoeType) url.searchParams.set('shoeType', params.shoeType);
   if (params.kidsSubGender) url.searchParams.set('kidsSubGender', params.kidsSubGender);
   if (params.page) url.searchParams.set('page', String(params.page));
   if (params.limit) url.searchParams.set('limit', String(params.limit));

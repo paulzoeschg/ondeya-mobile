@@ -41,6 +41,7 @@ import {
   genderLabel,
   apparelTypeLabel,
   jewelryTypeLabel,
+  shoeTypeLabel,
 } from '../../constants/categories';
 import OnboardingScreen from './OnboardingScreen';
 import MechanicsIntro from '../../components/MechanicsIntro';
@@ -73,6 +74,9 @@ function preferenceFilters(): FetchProductsParams {
   }
   if (prefs.selectedApparelTypes && prefs.selectedApparelTypes.length > 0) {
     filters.apparelType = prefs.selectedApparelTypes.join(',');
+  }
+  if (prefs.selectedShoeTypes && prefs.selectedShoeTypes.length > 0) {
+    filters.shoeType = prefs.selectedShoeTypes.join(',');
   }
   // Kids-SubGender filtert NUR Kids-Produkte. Wenn beide aktiv (Default), kein Filter setzen.
   if (
@@ -270,6 +274,9 @@ function buildActiveFilterDescription(): string {
   }
   if (prefs.selectedJewelryTypes.length > 0) {
     parts.push(prefs.selectedJewelryTypes.map((j) => jewelryTypeLabel(j) || j).join(' / '));
+  }
+  if (prefs.selectedShoeTypes.length > 0) {
+    parts.push(prefs.selectedShoeTypes.map((s) => shoeTypeLabel(s) || s).join(' / '));
   }
   return parts.join(' · ');
 }

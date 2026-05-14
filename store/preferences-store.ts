@@ -5,6 +5,7 @@ import type {
   GenderValue,
   ApparelTypeValue,
   KidsSubGenderValue,
+  ShoeTypeValue,
 } from '../constants/categories';
 
 // V2 Typen (Quiz V2, 2026-04-29 — Onboarding-Antworten)
@@ -14,6 +15,9 @@ export type StyleV2Type = 'casual' | 'elegant' | 'party' | 'streetwear' | 'minim
 export type CategoryV2Type = SubcategoryValue | 'alle';
 export type PriceRangeType = 'bis50' | '50bis150' | '150bis300' | 'ueber300' | 'egal';
 
+// V3 Typen (Quiz V3, 2026-05-12 — Trends an den Anfang)
+export type QuizPathType = 'trends' | 'manuell';
+
 // Ältere Typen — bleiben für Watchlist-Store und Rückwärtskompatibilität erhalten
 export type StyleType = 'classic' | 'casual' | 'sporty' | 'mix';
 export type CategoryType = 'mode' | 'living' | 'lifestyle';
@@ -22,6 +26,11 @@ export type DiscountType = '20' | '30' | '40' | '50';
 export type SizeType = 'xs_s' | 'm' | 'l_xl' | 'xxl';
 
 export type Preferences = {
+  // V3 Felder (Quiz V3, 2026-05-12 — Trends an den Anfang)
+  quizPath: QuizPathType | null;
+  followedTrendIds: string[];          // Liste der gefolgten Trend-IDs (aus Q3-A)
+  selectedShoeTypes: ShoeTypeValue[];  // Schuh-Subtyp-Filter (aus Q4-B Block B + Profil)
+
   // V2 Felder (Onboarding-Antworten)
   genders: GenderType[];
   stylesV2: StyleV2Type[];
@@ -73,6 +82,9 @@ export function isProductDisabled(productId: string, disabledBrands: string[]): 
 }
 
 const defaultPreferences: Preferences = {
+  quizPath: null,
+  followedTrendIds: [],
+  selectedShoeTypes: [],
   genders: [],
   stylesV2: [],
   categoriesV2: [],
@@ -137,6 +149,22 @@ function migrate(stored: Partial<Preferences> & Record<string, unknown>): Partia
   // discoveryAffinity ist gestrichen — falls vorhanden, ignorieren
   delete migrated.discoveryAffinity;
 
+  // V2 → V3 (2026-05-12): Alte User haben kein quizPath. Default auf 'manuell',
+  // damit ihr aktueller Feed-Filter sinnvoll bleibt — kein Re-Onboarding.
+  if (migrated.onboardingDone && !migrated.quizPath) {
+    migrated.quizPath = 'manuell';
+    migrated.followedTrendIds = [];
+    migrated.selectedShoeTypes = []; // leer = kein Schuh-Filter, alle anzeigen
+  }
+
+  // selectedShoeTypes-Wert säubern (falls aus Vorschau-Build mit anderer Form)
+  if (Array.isArray(migrated.selectedShoeTypes)) {
+    migrated.selectedShoeTypes = (migrated.selectedShoeTypes as string[]).filter(
+      (v): v is ShoeTypeValue =>
+        ['sneaker', 'business', 'sport', 'stiefel', 'sandalen', 'pumps', 'sonstiges'].includes(v)
+    );
+  }
+
   return migrated as Partial<Preferences>;
 }
 
@@ -170,24 +198,44 @@ export function setPreferences(updates: Partial<Preferences>) {
   save();
 }
 
-export type OnboardingAnswersV2 = {
+export type OnboardingAnswersV3 = {
+  quizPath: QuizPathType;
   genders: GenderType[];
-  stylesV2: StyleV2Type[];
-  categoriesV2: CategoryV2Type[];
+  // Trends-Pfad
+  followedTrendIds?: string[];
+  // Manuell-Pfad
+  categoriesV2?: CategoryV2Type[];
+  stylesV2?: StyleV2Type[];
+  shoeTypes?: ShoeTypeValue[];
+  // Beide
   priceRange: PriceRangeType | null;
 };
 
 // Onboarding-Antworten füttern direkt die Feed-Filter (selectedGenders/selectedSubcategories),
 // damit der Feed nach dem Quiz sofort relevant ist.
-export function completeOnboarding(answers: OnboardingAnswersV2) {
+//
+// Trends-Pfad: selectedSubcategories bleibt leer (alle Warengruppen anzeigen) —
+// die spätere Trend-Sektion priorisiert die Stücke der gefolgten Trends.
+// Manuell-Pfad: aus categoriesV2 ableiten wie in V2.
+export function completeOnboarding(answers: OnboardingAnswersV3) {
   const selectedGenders = [...answers.genders];
-  const selectedSubcategories: SubcategoryValue[] = answers.categoriesV2.includes('alle')
-    ? []
-    : (answers.categoriesV2.filter((c) => c !== 'alle') as SubcategoryValue[]);
+  const categoriesV2 = answers.categoriesV2 ?? [];
+  const selectedSubcategories: SubcategoryValue[] =
+    answers.quizPath === 'trends'
+      ? []
+      : categoriesV2.includes('alle')
+        ? []
+        : (categoriesV2.filter((c) => c !== 'alle') as SubcategoryValue[]);
 
   preferences = {
     ...preferences,
-    ...answers,
+    quizPath: answers.quizPath,
+    followedTrendIds: answers.followedTrendIds ?? [],
+    selectedShoeTypes: answers.shoeTypes ?? [],
+    genders: answers.genders,
+    stylesV2: answers.stylesV2 ?? [],
+    categoriesV2,
+    priceRange: answers.priceRange,
     selectedGenders,
     selectedSubcategories,
     onboardingDone: true,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   TextInput,
   Image,
   Switch,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,13 +30,16 @@ import {
   JEWELRY_TYPES,
   APPAREL_TYPES,
   KIDS_SUBGENDERS,
+  SHOE_TYPES,
   type GenderValue,
   type SubcategoryValue,
   type JewelryTypeValue,
   type ApparelTypeValue,
   type KidsSubGenderValue,
+  type ShoeTypeValue,
 } from '../../constants/categories';
 import { resetWatchlist } from '../../store/watchlist-store';
+import { fetchActiveTrends, type Trend } from '../../services/api';
 
 const PROFILE_STORAGE_KEY = '@ondeya_profile';
 
@@ -188,10 +193,92 @@ export default function ProfileScreen() {
     setPrefs(getPreferences());
   };
 
+  const toggleShoeType = (value: ShoeTypeValue) => {
+    const curr = prefs.selectedShoeTypes;
+    const updated = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value];
+    setPreferences({ selectedShoeTypes: updated });
+    setPrefs(getPreferences());
+  };
+
   const updatePriceRange = (value: PriceRangeType) => {
     setPreferences({ priceRange: value });
     setPrefs(getPreferences());
   };
+
+  // Bekleidungs-Modus (Briefing V3): Stilrichtung + Trends parallel möglich.
+  const stilrichtungAktiv = prefs.stylesV2.length > 0;
+  const trendsAktiv = prefs.followedTrendIds.length > 0;
+
+  // Tap auf aktiven Toggle → komplette Liste leeren.
+  const clearStyles = () => {
+    if (!stilrichtungAktiv) return;
+    setPreferences({ stylesV2: [] });
+    setPrefs(getPreferences());
+  };
+
+  const clearTrends = () => {
+    if (!trendsAktiv) return;
+    setPreferences({ followedTrendIds: [] });
+    setPrefs(getPreferences());
+  };
+
+  // Verfügbare Trends für „Trend hinzufügen"-Sheet.
+  const [availableTrends, setAvailableTrends] = useState<Trend[]>([]);
+  const [trendsLoading, setTrendsLoading] = useState(false);
+  const [trendsError, setTrendsError] = useState<string | null>(null);
+  const [trendSheetVisible, setTrendSheetVisible] = useState(false);
+
+  useEffect(() => {
+    if (!trendSheetVisible || availableTrends.length > 0) return;
+    setTrendsLoading(true);
+    fetchActiveTrends()
+      .then((data) => {
+        setAvailableTrends(data.filter((t) => t.active).sort((a, b) => a.sortOrder - b.sortOrder));
+        setTrendsError(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[Profile] Trends laden fehlgeschlagen', e);
+        setTrendsError('Trends gerade nicht erreichbar.');
+      })
+      .finally(() => setTrendsLoading(false));
+  }, [trendSheetVisible, availableTrends.length]);
+
+  const toggleTrendId = (id: string) => {
+    const cur = prefs.followedTrendIds;
+    const updated = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    setPreferences({ followedTrendIds: updated });
+    setPrefs(getPreferences());
+  };
+
+  const removeTrendId = (id: string) => {
+    const updated = prefs.followedTrendIds.filter((x) => x !== id);
+    setPreferences({ followedTrendIds: updated });
+    setPrefs(getPreferences());
+  };
+
+  // Für die Anzeige der gefolgten Trends im Profil brauchen wir Titel.
+  // Lazy-Load: einmal beim Mount, wenn followedTrendIds nicht leer ist.
+  useEffect(() => {
+    if (prefs.followedTrendIds.length === 0) return;
+    if (availableTrends.length > 0) return;
+    if (trendsLoading) return;
+    setTrendsLoading(true);
+    fetchActiveTrends()
+      .then((data) => {
+        setAvailableTrends(data.filter((t) => t.active).sort((a, b) => a.sortOrder - b.sortOrder));
+        setTrendsError(null);
+      })
+      .catch((e: unknown) => {
+        console.warn('[Profile] Trends laden fehlgeschlagen', e);
+        setTrendsError('Trends gerade nicht erreichbar.');
+      })
+      .finally(() => setTrendsLoading(false));
+  }, [prefs.followedTrendIds.length, availableTrends.length, trendsLoading]);
+
+  const followedTrends: { id: string; title: string }[] = prefs.followedTrendIds.map((id) => {
+    const known = availableTrends.find((t) => t.id === id);
+    return { id, title: known?.title ?? id };
+  });
 
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -249,6 +336,9 @@ export default function ProfileScreen() {
 
   const showJewelryTypes = prefs.selectedSubcategories.includes('schmuck');
   const showApparelTypes = prefs.selectedSubcategories.includes('bekleidung');
+  // Schuh-Typ-Sektion: sichtbar wenn 'schuhe' aktiv ist ODER alle Warengruppen frei (leer).
+  const showShoeTypes =
+    prefs.selectedSubcategories.length === 0 || prefs.selectedSubcategories.includes('schuhe');
   const showKidsSubGenders = prefs.selectedGenders.includes('kids');
   const displayName = profile.name.trim() || 'Du';
 
@@ -352,18 +442,91 @@ export default function ProfileScreen() {
           )}
         </Section>
 
-        <Section title="Dein Stil">
-          <View style={styles.chips}>
-            {styleOptions.map((o) => (
-              <SettingChip
-                key={o.value}
-                label={o.label}
-                selected={prefs.stylesV2.includes(o.value)}
-                onPress={() => toggleStyle(o.value)}
-              />
-            ))}
+        <Section title="Bekleidungs-Modus">
+          <Text style={styles.modeHint}>Wie soll Ondeya für dich filtern?</Text>
+          <View style={styles.modeRow}>
+            <TouchableOpacity
+              style={[styles.modePill, stilrichtungAktiv && styles.modePillActive]}
+              onPress={clearStyles}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.modePillTitle, stilrichtungAktiv && styles.modePillTitleActive]}>
+                Meine Stilrichtung
+              </Text>
+              <Text style={[styles.modePillSub, stilrichtungAktiv && styles.modePillSubActive]}>
+                {stilrichtungAktiv ? 'Aktiv · Tipp zum Leeren' : 'Aus'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modePill, trendsAktiv && styles.modePillActive]}
+              onPress={clearTrends}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.modePillTitle, trendsAktiv && styles.modePillTitleActive]}>
+                Trends folgen
+              </Text>
+              <Text style={[styles.modePillSub, trendsAktiv && styles.modePillSubActive]}>
+                {trendsAktiv ? `Aktiv · ${prefs.followedTrendIds.length}` : 'Aus'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.subSection}>
+            <Text style={styles.subSectionLabel}>Stilrichtungen</Text>
+            <View style={styles.chips}>
+              {styleOptions.map((o) => (
+                <SettingChip
+                  key={o.value}
+                  label={o.label}
+                  selected={prefs.stylesV2.includes(o.value)}
+                  onPress={() => toggleStyle(o.value)}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.subSection}>
+            <Text style={styles.subSectionLabel}>Trends die du folgst</Text>
+            {followedTrends.length === 0 ? (
+              <Text style={styles.modeEmpty}>Noch keine Trends gewählt.</Text>
+            ) : (
+              followedTrends.map((t) => (
+                <View key={t.id} style={styles.followedTrendRow}>
+                  <Text style={styles.followedTrendLabel}>▸ {t.title}</Text>
+                  <TouchableOpacity onPress={() => removeTrendId(t.id)} style={styles.followedTrendRemove}>
+                    <Text style={styles.followedTrendRemoveText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+            <TouchableOpacity
+              style={styles.addTrendButton}
+              onPress={() => setTrendSheetVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.addTrendButtonText}>+ Trend hinzufügen</Text>
+            </TouchableOpacity>
           </View>
         </Section>
+
+        {showShoeTypes && (
+          <Section title="Schuh-Typ">
+            <Text style={styles.modeHint}>Welche Schuhe interessieren dich?</Text>
+            <View style={styles.chips}>
+              {SHOE_TYPES.map((s) => (
+                <SettingChip
+                  key={s.value}
+                  label={s.label}
+                  selected={prefs.selectedShoeTypes.includes(s.value)}
+                  onPress={() => toggleShoeType(s.value)}
+                />
+              ))}
+            </View>
+            {prefs.selectedShoeTypes.length === 0 && (
+              <Text style={styles.modeEmpty}>Leer = alle Schuh-Typen.</Text>
+            )}
+          </Section>
+        )}
 
         <Section title="Preisrahmen">
           <View style={styles.chips}>
@@ -440,6 +603,60 @@ export default function ProfileScreen() {
 
         <Text style={styles.version}>Ondeya · Beta · v0.1</Text>
       </ScrollView>
+
+      <Modal
+        visible={trendSheetVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setTrendSheetVisible(false)}
+      >
+        <View style={styles.trendSheetBackdrop}>
+          <View style={styles.trendSheet}>
+            <View style={styles.trendSheetHeader}>
+              <Text style={styles.trendSheetTitle}>Trends</Text>
+              <TouchableOpacity onPress={() => setTrendSheetVisible(false)}>
+                <Text style={styles.trendSheetClose}>Fertig</Text>
+              </TouchableOpacity>
+            </View>
+            {trendsLoading && (
+              <View style={styles.trendSheetLoader}>
+                <ActivityIndicator color={colors.sand} />
+                <Text style={styles.modeEmpty}>Trends werden geladen…</Text>
+              </View>
+            )}
+            {trendsError && !trendsLoading && (
+              <Text style={[styles.modeEmpty, { padding: 16 }]}>{trendsError}</Text>
+            )}
+            {!trendsLoading && !trendsError && availableTrends.length === 0 && (
+              <Text style={[styles.modeEmpty, { padding: 16 }]}>
+                Diese Woche kuratieren wir gerade — der erste Trend kommt bald.
+              </Text>
+            )}
+            <ScrollView style={{ maxHeight: 480 }}>
+              {availableTrends.map((t) => {
+                const selected = prefs.followedTrendIds.includes(t.id);
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.trendSheetRow, selected && styles.trendSheetRowSelected]}
+                    onPress={() => toggleTrendId(t.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Image source={{ uri: t.heroImage }} style={styles.trendSheetThumb} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.trendSheetRowTitle}>{t.title}</Text>
+                      <Text style={styles.trendSheetRowDesc} numberOfLines={2}>{t.description}</Text>
+                    </View>
+                    <View style={[styles.trendSheetCheck, selected && styles.trendSheetCheckSelected]}>
+                      {selected && <Text style={styles.trendSheetCheckMark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -585,4 +802,103 @@ const styles = StyleSheet.create({
   devHint: { color: colors.taupe, fontSize: 12, textAlign: 'center' },
 
   version: { color: colors.espresso, fontSize: 12, textAlign: 'center', marginTop: 8 },
+
+  // Bekleidungs-Modus / Schuh-Typ
+  modeHint: { color: colors.linen, fontSize: 14, marginBottom: 4 },
+  modeRow: { flexDirection: 'row', gap: 10 },
+  modePill: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.taupe,
+    gap: 4,
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(26,23,20,0.35)',
+  },
+  modePillActive: {
+    borderColor: colors.sand,
+    backgroundColor: 'rgba(201, 168, 130, 0.12)',
+  },
+  modePillTitle: { color: colors.linen, fontSize: 14, fontWeight: '700' },
+  modePillTitleActive: { color: colors.sand },
+  modePillSub: { color: colors.taupe, fontSize: 11 },
+  modePillSubActive: { color: 'rgba(201,168,130,0.85)' },
+  modeEmpty: { color: colors.taupe, fontSize: 13 },
+
+  followedTrendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138, 127, 114, 0.1)',
+  },
+  followedTrendLabel: { flex: 1, color: colors.linen, fontSize: 14 },
+  followedTrendRemove: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  followedTrendRemoveText: { color: colors.taupe, fontSize: 22, lineHeight: 22 },
+
+  addTrendButton: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.sand,
+  },
+  addTrendButtonText: { color: colors.sand, fontSize: 13, fontWeight: '600' },
+
+  // Trend-Auswahl-Modal
+  trendSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  trendSheet: {
+    backgroundColor: colors.noir,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 24,
+    maxHeight: '85%',
+  },
+  trendSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138, 127, 114, 0.15)',
+  },
+  trendSheetTitle: { color: colors.sand, fontSize: 16, fontWeight: '700', letterSpacing: 1 },
+  trendSheetClose: { color: colors.linen, fontSize: 15, fontWeight: '600' },
+  trendSheetLoader: { padding: 24, gap: 10, alignItems: 'center' },
+  trendSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138, 127, 114, 0.08)',
+  },
+  trendSheetRowSelected: { backgroundColor: 'rgba(201, 168, 130, 0.06)' },
+  trendSheetThumb: { width: 56, height: 56, borderRadius: 10, backgroundColor: colors.espresso },
+  trendSheetRowTitle: { color: colors.linen, fontSize: 15, fontWeight: '700' },
+  trendSheetRowDesc: { color: colors.taupe, fontSize: 12, marginTop: 2 },
+  trendSheetCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.taupe,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trendSheetCheckSelected: { backgroundColor: colors.sand, borderColor: colors.sand },
+  trendSheetCheckMark: { color: colors.noir, fontSize: 13, fontWeight: '700' },
 });
