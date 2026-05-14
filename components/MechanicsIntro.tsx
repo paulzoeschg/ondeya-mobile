@@ -29,6 +29,7 @@ const SWIPE_ACTIONS = [
 const GESTURE_ACTIONS = [
   { symbol: '◎', label: 'Antippen', sublabel: 'Produktdetails öffnen sich', color: colors.sand },
   { symbol: '⊙', label: 'Tippen unten Mitte', sublabel: 'Menü erscheint', color: colors.linen },
+  { symbol: '◉', label: 'Tippen oben links', sublabel: 'Letzte Karte zurück', color: colors.taupe },
 ] as const;
 
 export default function MechanicsIntro({ onDismiss }: { onDismiss: () => void }) {
