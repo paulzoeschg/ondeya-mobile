@@ -34,6 +34,7 @@ import {
   SUBCATEGORIES,
   JEWELRY_TYPES,
   APPAREL_TYPES,
+  filterApparelByGenders,
   KIDS_SUBGENDERS,
   SHOE_TYPES,
   type GenderValue,
@@ -442,7 +443,10 @@ export default function ProfileScreen() {
             <View style={styles.subSection}>
               <Text style={styles.subSectionLabel}>Bekleidungs-Arten</Text>
               <View style={styles.chips}>
-                {APPAREL_TYPES.map((a) => (
+                {/* 2026-05-16 (Punkt 6): Damen-only-Kategorien (Kleider, Röcke)
+                    nur wenn Damen ausgewählt ist, Herren-only (Westen) nur wenn
+                    Herren ausgewählt. Keine Gender-Auswahl → alles zeigen. */}
+                {filterApparelByGenders(prefs.selectedGenders).map((a) => (
                   <SettingChip
                     key={a.value}
                     label={a.label}

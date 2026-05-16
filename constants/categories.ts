@@ -68,34 +68,59 @@ export const JEWELRY_TYPES: JewelryTypeDefinition[] = [
 // ── Bekleidungs-Subtypen (apparelType) ──────────────────────────────────────
 // Briefing 2026-05-09 (Taxonomie-Erweiterung): Bekleidung kriegt analog zu Schmuck
 // einen Subtyp-Filter im Profil.
+// 2026-05-16 (Punkt 6): 'westen' (Herren-only), 'joggers', 'muetzen', 'sport'
+// ergänzt. genderScope steuert, welche Chips im Profil gezeigt werden je nach
+// gewähltem Gender — Kleider erscheinen z.B. nicht wenn nur Herren aktiv ist.
 export type ApparelTypeValue =
-  | 'jeans' | 'hosen' | 'kurze_hosen'
+  | 'jeans' | 'hosen' | 'kurze_hosen' | 'joggers'
   | 't_shirts' | 'tops' | 'pullover'
-  | 'hemden_polos' | 'kleider' | 'caps'
+  | 'hemden_polos' | 'kleider' | 'caps' | 'muetzen'
   | 'jacken_maentel' | 'sweatshirts_hoodies' | 'roecke'
-  | 'bademode' | 'sonstiges';
+  | 'bademode' | 'westen' | 'sport'
+  | 'sonstiges';
+
+export type GenderScope = 'damen' | 'herren' | 'beide';
 
 export interface ApparelTypeDefinition {
   value: ApparelTypeValue;
   label: string;
+  genderScope: GenderScope;
 }
 
 export const APPAREL_TYPES: ApparelTypeDefinition[] = [
-  { value: 'jeans', label: 'Jeans' },
-  { value: 'hosen', label: 'Hosen' },
-  { value: 'kurze_hosen', label: 'Kurze Hosen' },
-  { value: 't_shirts', label: 'T-Shirts' },
-  { value: 'tops', label: 'Tops' },
-  { value: 'pullover', label: 'Pullover' },
-  { value: 'hemden_polos', label: 'Hemden / Polos' },
-  { value: 'kleider', label: 'Kleider' },
-  { value: 'caps', label: 'Caps' },
-  { value: 'jacken_maentel', label: 'Jacken / Mäntel' },
-  { value: 'sweatshirts_hoodies', label: 'Sweatshirts / Hoodies' },
-  { value: 'roecke', label: 'Röcke' },
-  { value: 'bademode', label: 'Bademode' },
-  { value: 'sonstiges', label: 'Sonstiges' },
+  { value: 'jeans', label: 'Jeans', genderScope: 'beide' },
+  { value: 'hosen', label: 'Hosen', genderScope: 'beide' },
+  { value: 'kurze_hosen', label: 'Kurze Hosen', genderScope: 'beide' },
+  { value: 'joggers', label: 'Joggers', genderScope: 'beide' },
+  { value: 't_shirts', label: 'T-Shirts', genderScope: 'beide' },
+  { value: 'tops', label: 'Tops', genderScope: 'beide' },
+  { value: 'pullover', label: 'Pullover', genderScope: 'beide' },
+  { value: 'hemden_polos', label: 'Hemden / Polos', genderScope: 'beide' },
+  { value: 'kleider', label: 'Kleider', genderScope: 'damen' },
+  { value: 'caps', label: 'Caps', genderScope: 'beide' },
+  { value: 'muetzen', label: 'Mützen', genderScope: 'beide' },
+  { value: 'jacken_maentel', label: 'Jacken / Mäntel', genderScope: 'beide' },
+  { value: 'sweatshirts_hoodies', label: 'Sweatshirts / Hoodies', genderScope: 'beide' },
+  { value: 'roecke', label: 'Röcke', genderScope: 'damen' },
+  { value: 'bademode', label: 'Bademode', genderScope: 'beide' },
+  { value: 'westen', label: 'Westen', genderScope: 'herren' },
+  { value: 'sport', label: 'Sportbekleidung', genderScope: 'beide' },
+  { value: 'sonstiges', label: 'Sonstiges', genderScope: 'beide' },
 ];
+
+// 2026-05-16 (Punkt 6): Hilfsfunktion fürs Profil — gefiltert nach aktuellen
+// Gender-Auswahlen. Keine Gender-Auswahl → alle anzeigen. Nur Damen → ohne
+// Westen. Nur Herren → ohne Kleider und Röcke. Beide ausgewählt → alle.
+export function filterApparelByGenders(genders: GenderValue[]): ApparelTypeDefinition[] {
+  const hasDamen = genders.includes('damen') || genders.includes('unisex') || genders.includes('kids') || genders.length === 0;
+  const hasHerren = genders.includes('herren') || genders.includes('unisex') || genders.includes('kids') || genders.length === 0;
+  return APPAREL_TYPES.filter((a) => {
+    if (a.genderScope === 'beide') return true;
+    if (a.genderScope === 'damen') return hasDamen;
+    if (a.genderScope === 'herren') return hasHerren;
+    return true;
+  });
+}
 
 // ── Schuh-Subtypen (shoeType) ───────────────────────────────────────────────
 // Briefing 2026-05-12 (Backend Schuh-Taxonomie): Schuhe kriegen analog zu
