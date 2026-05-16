@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getProfile, isProfileLoaded, loadProfile, subscribeProfile } from '../../store/profile-store';
+import { getProfile, isProfileLoaded, loadProfile, subscribeProfile, type ProfileData } from '../../store/profile-store';
 
 const colors = {
   noir: '#1a1714',
@@ -11,14 +11,22 @@ const colors = {
   espresso: '#3d3630',
 };
 
+// 2026-05-16 (Punkt 4): Avatar wurde im echten Tab-Bar-Icon nicht angezeigt,
+// obwohl der gleiche Code in BottomNavBar.tsx funktioniert. Der Unterschied:
+// expo-router cached die `tabBarIcon`-Render-Funktion auf Layout-Ebene anders
+// als eine direkt in den View-Tree gerenderte Komponente. Das alte setTick-
+// Pattern hat zwar ein State-Update getriggert, aber der State enthielt keinen
+// Profile-Snapshot — also blieb der gerenderte Wert bei dem, was beim ersten
+// Mount aus getProfile() gelesen wurde (in der Regel noch leer, bevor
+// loadProfile() done ist). Lösung: ProfileData direkt im useState halten,
+// analog zu useProfileSnapshot in BottomNavBar.tsx.
 function ProfileTabIcon({ color, focused }: { color: string; focused: boolean }) {
-  const [, setTick] = useState(0);
+  const [profile, setProfile] = useState<ProfileData>(() => getProfile());
   useEffect(() => {
     if (!isProfileLoaded()) loadProfile();
-    const unsubscribe = subscribeProfile(() => setTick((n) => n + 1));
+    const unsubscribe = subscribeProfile(() => setProfile(getProfile()));
     return () => { unsubscribe(); };
   }, []);
-  const profile = getProfile();
   if (profile.avatarUri) {
     return (
       <View style={[iconStyles.wrap, focused && iconStyles.wrapActive]}>
@@ -87,6 +95,15 @@ export default function TabLayout() {
           title: 'Profil',
           tabBarIcon: ({ color, focused }) => <ProfileTabIcon color={color} focused={focused} />,
         }}
+      />
+      {/* 2026-05-16 (Punkt 5): OnboardingScreen liegt im (tabs)/-Ordner und
+          würde sonst von expo-router automatisch als sichtbarer Tab gerendert
+          (mit dem leeren Dreieck-Default-Icon). href:null versteckt den Tab
+          vollständig. Onboarding triggert sowieso programmatisch aus
+          index.tsx, wenn isOnboardingDone() false ist. */}
+      <Tabs.Screen
+        name="OnboardingScreen"
+        options={{ href: null }}
       />
     </Tabs>
   );

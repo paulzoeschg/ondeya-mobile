@@ -66,15 +66,32 @@ export type Preferences = {
 
 const STORAGE_KEY = '@ondeya_preferences';
 
-// Partner (Quellen) im System — Key = angezeigter Name, Value = Produkt-ID-Präfix
+// Partner (Quellen) im System — Key = angezeigter Name, Value = Produkt-ID-Präfix.
+//
+// 2026-05-16: Stand muss synchron mit ACTIVE_SCRAPERS in
+//   backend/src/services/products-cache.ts gehalten werden.
+// TODO (Punkt 1, eigener Folge-Task): /api/brands-Endpoint im Backend +
+//   dynamic fetch im profile.tsx, damit die Toggle-Liste automatisch mit dem
+//   tatsächlich aktiven Pool synchron bleibt und diese hardcoded Liste
+//   entfällt.
+//
+// Pausiert/deaktiviert (NICHT in Liste, sind im Backend stillgelegt):
+//   shoesforcrews-     (Mode-Fokus, 2026-05-09 deaktiviert)
+//   footshop-          (Cloudflare 503 seit 2026-05-09)
+//   bademantelparadies-(passt nicht zu Mode, 2026-05-09 deaktiviert)
+//   roncato-           (Cloudflare, 2026-05-05 pausiert)
 export const BRAND_PARTNERS: { label: string; idPrefix: string }[] = [
   { label: 'Lyle & Scott', idPrefix: 'lyle-scott-' },
   { label: 'Undiemeister', idPrefix: 'undiemeister-' },
-  { label: 'Shoes for Crews', idPrefix: 'shoesforcrews-' },
-  { label: 'DiamondOro', idPrefix: 'diamondoro-' },
-  { label: 'Footshop', idPrefix: 'footshop-' },
-  { label: 'TOUS', idPrefix: 'tous-' },
   { label: 'Darienzo Collezioni', idPrefix: 'darienzo-' },
+  { label: 'DiamondOro', idPrefix: 'diamondoro-' },
+  { label: 'TOUS', idPrefix: 'tous-' },
+  { label: 'Mimmu', idPrefix: 'mimmu-' },
+  { label: 'Engelsrufer', idPrefix: 'engelsrufer-' },
+  { label: 'Lebasq', idPrefix: 'lebasq-' },
+  { label: 'Stickabush Berlin', idPrefix: 'stickabush-' },
+  { label: 'CafeNoir', idPrefix: 'cafenoir-' },
+  { label: 'Repeat Cashmere', idPrefix: 'repeat-cashmere-' },
 ];
 
 export function getPartnerLabel(productId: string): string {

@@ -61,6 +61,24 @@ export async function fetchActiveTrends(): Promise<Trend[]> {
   return data as Trend[];
 }
 
+// 2026-05-16 (Punkt 1): Marken aus dem aktiven Pool dynamisch laden. Die App
+// zeigt die Toggle-Liste im Profil dann automatisch synchron mit dem Backend —
+// kein manuelles Pflegen der BRAND_PARTNERS-Liste mehr nötig. Bei Fehler
+// fällt der Caller zurück auf die hardcoded BRAND_PARTNERS aus preferences-store.
+export interface BrandInfo {
+  name: string;
+  count: number;
+}
+
+export async function fetchBrands(): Promise<BrandInfo[]> {
+  const response = await fetch(`${BASE_URL}/api/brands`);
+  if (!response.ok) {
+    throw new Error(`API Fehler: ${response.status}`);
+  }
+  const data = await response.json();
+  return (data.brands || []) as BrandInfo[];
+}
+
 export async function fetchProducts(params: FetchProductsParams = {}): Promise<Product[]> {
   const url = new URL(`${BASE_URL}/api/products`);
 

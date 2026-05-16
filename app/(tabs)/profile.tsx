@@ -44,7 +44,7 @@ import {
   type ShoeTypeValue,
 } from '../../constants/categories';
 import { resetWatchlist } from '../../store/watchlist-store';
-import { fetchActiveTrends, type Trend } from '../../services/api';
+import { fetchActiveTrends, fetchBrands, type Trend, type BrandInfo } from '../../services/api';
 import {
   getProfile,
   setProfile as setProfileStore,
@@ -301,6 +301,24 @@ export default function ProfileScreen() {
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [trendsError, setTrendsError] = useState<string | null>(null);
 
+  // 2026-05-16 (Punkt 1): Brand-Liste dynamisch aus /api/brands ziehen,
+  // damit die Toggle-Liste automatisch synchron mit ACTIVE_SCRAPERS im Backend
+  // bleibt. Default = hardcoded BRAND_PARTNERS (label als name, count 0) —
+  // so funktioniert die UI auch bei Offline / Backend-Fehler / Cold-Start.
+  const [availableBrands, setAvailableBrands] = useState<BrandInfo[]>(() =>
+    BRAND_PARTNERS.map((p) => ({ name: p.label, count: 0 }))
+  );
+
+  useEffect(() => {
+    fetchBrands()
+      .then((brands) => {
+        if (brands.length > 0) setAvailableBrands(brands);
+      })
+      .catch((e: unknown) => {
+        console.warn('[Profile] Brands laden fehlgeschlagen — Fallback auf hardcoded Liste', e);
+      });
+  }, []);
+
   useEffect(() => {
     setTrendsLoading(true);
     fetchActiveTrends()
@@ -511,17 +529,18 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Diese Marken zeigt dir Ondeya</Text>
-          {BRAND_PARTNERS.map((partner) => {
-            const isEnabled = !prefs.disabledBrands.includes(partner.label);
+          {availableBrands.map((brand) => {
+            const isEnabled = !prefs.disabledBrands.includes(brand.name);
+            const label = brand.count > 0 ? `${brand.name} (${brand.count})` : brand.name;
             return (
-              <View key={partner.label} style={styles.brandRow}>
-                <Text style={styles.brandLabel}>{partner.label}</Text>
+              <View key={brand.name} style={styles.brandRow}>
+                <Text style={styles.brandLabel}>{label}</Text>
                 <Switch
                   value={isEnabled}
                   onValueChange={(enabled) => {
                     const updated = enabled
-                      ? prefs.disabledBrands.filter((b) => b !== partner.label)
-                      : [...prefs.disabledBrands, partner.label];
+                      ? prefs.disabledBrands.filter((b) => b !== brand.name)
+                      : [...prefs.disabledBrands, brand.name];
                     setPreferences({ disabledBrands: updated });
                     setPrefs(getPreferences());
                   }}
